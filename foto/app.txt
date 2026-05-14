@@ -1,0 +1,1274 @@
+import { useState } from 'react'
+import {
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  BadgeCheck,
+  BarChart3,
+  Bell,
+  Bot,
+  Calendar,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  CircleCheck,
+  CircleDollarSign,
+  Clock,
+  CreditCard,
+  Download,
+  Ellipsis,
+  FileText,
+  Funnel,
+  Goal,
+  HandCoins,
+  Info,
+  Landmark,
+  Laptop,
+  LayoutDashboard,
+  Lightbulb,
+  LockKeyhole,
+  Mail,
+  Monitor,
+  Moon,
+  Palette,
+  PenLine,
+  Plus,
+  ReceiptText,
+  RefreshCw,
+  Repeat,
+  Search,
+  Send,
+  Shield,
+  ShieldCheck,
+  Smartphone,
+  Sparkles,
+  SquareArrowOutUpRight,
+  Sun,
+  Target,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  User,
+  Wallet,
+  WalletCards,
+} from 'lucide-react'
+
+import Sidebar from './components/layout/Sidebar'
+
+const dashboardStats = [
+  {
+    title: 'Total Balance',
+    value: 'Rp12.450.000',
+    change: '+12.5%',
+    icon: WalletCards,
+    tone: 'green',
+  },
+  {
+    title: 'Monthly Income',
+    value: 'Rp8.200.000',
+    change: '+8.1%',
+    icon: TrendingUp,
+    tone: 'green',
+  },
+  {
+    title: 'Monthly Expense',
+    value: 'Rp3.850.000',
+    change: '-2.4%',
+    icon: ArrowDownRight,
+    tone: 'red',
+  },
+]
+
+const transactions = [
+  {
+    name: 'Freelance Payment',
+    detail: 'Payment received',
+    category: 'Income',
+    date: 'May 20, 2024',
+    amount: '+Rp2.500.000',
+    positive: true,
+  },
+  {
+    name: 'Spotify Premium',
+    detail: 'Monthly subscription',
+    category: 'Entertainment',
+    date: 'May 20, 2024',
+    amount: '-Rp59.000',
+  },
+  {
+    name: 'Coffee Shop',
+    detail: 'Food & Drink',
+    category: 'Food & Drink',
+    date: 'May 19, 2024',
+    amount: '-Rp45.000',
+  },
+  {
+    name: 'Groceries',
+    detail: 'Supermarket',
+    category: 'Shopping',
+    date: 'May 18, 2024',
+    amount: '-Rp230.000',
+  },
+  {
+    name: 'SeaBank Interest',
+    detail: 'Interest received',
+    category: 'Passive Income',
+    date: 'May 18, 2024',
+    amount: '+Rp12.450',
+    positive: true,
+  },
+]
+
+const recurringRows = [
+  ['Spotify Premium', 'Music streaming', 'Subscription', 'Rp59.000', 'Monthly', 'Jun 2, 2024', 'Active', 'spotify'],
+  ['Netflix', 'Video streaming', 'Subscription', 'Rp149.000', 'Monthly', 'Jun 5, 2024', 'Active', 'netflix'],
+  ['PLN Electricity', 'Utilities', 'Bill', 'Rp450.000', 'Monthly', 'Jun 10, 2024', 'Active', 'pln'],
+  ['Internet (Indihome)', 'Internet service', 'Bill', 'Rp280.000', 'Monthly', 'Jun 12, 2024', 'Active', 'indihome'],
+  ['Adobe Creative Cloud', 'Design tools', 'Subscription', 'Rp239.000', 'Monthly', 'Jun 15, 2024', 'Active', 'adobe'],
+]
+
+const settingsTabs = [
+  ['Profile', 'Personal information', User],
+  ['Notifications', 'Manage alerts', Bell],
+  ['Appearance', 'Theme and display', Palette],
+  ['Security', 'Password and 2FA', Shield],
+  ['Accounts', 'Linked accounts', CreditCard],
+  ['Data & Privacy', 'Export and delete data', Download],
+  ['About', 'App information', Info],
+]
+
+const navIntents = {
+  Dashboard: { page: 'Dashboard', setting: 'Profile' },
+  Transactions: { page: 'Transactions', setting: 'Profile' },
+  Analytics: { page: 'Analytics', setting: 'Profile' },
+  Recurring: { page: 'Recurring', setting: 'Profile' },
+  'AI Assistant': { page: 'AI Assistant', setting: 'Profile' },
+  Settings: { page: 'Settings', setting: 'Profile' },
+}
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(' ')
+}
+
+function ActionButton({ children, icon: Icon, variant = 'primary', className = '' }) {
+  return (
+    <button className={cx('action-button', `action-button--${variant}`, className)} type="button">
+      {Icon ? <Icon size={18} /> : null}
+      <span>{children}</span>
+    </button>
+  )
+}
+
+function IconTile({ icon: Icon, tone = 'green', size = 24 }) {
+  return (
+    <div className={cx('icon-tile', `icon-tile--${tone}`)}>
+      <Icon size={size} />
+    </div>
+  )
+}
+
+function Badge({ children, tone = 'green' }) {
+  return <span className={cx('badge', `badge--${tone}`)}>{children}</span>
+}
+
+function Card({ children, className = '' }) {
+  return <section className={cx('card', className)}>{children}</section>
+}
+
+function PageHeader({ eyebrow, title, description, action }) {
+  return (
+    <header className="page-header">
+      <div>
+        <p className="eyebrow">{eyebrow}</p>
+        <h1>{title}</h1>
+        {description ? <p className="page-lede">{description}</p> : null}
+      </div>
+      {action ? <div className="page-action">{action}</div> : null}
+    </header>
+  )
+}
+
+function MetricCard({ title, value, change, icon, tone = 'green', note }) {
+  const isRed = tone === 'red'
+  const badgeTone = isRed || tone === 'orange' || tone === 'blue' ? tone : 'green'
+
+  return (
+    <Card className="metric-card">
+      <div className="metric-main">
+        <div>
+          <p className="muted-label">{title}</p>
+          <h3>{value}</h3>
+        </div>
+        <IconTile icon={icon} tone={tone} />
+      </div>
+      <div className="metric-footer">
+        <Badge tone={badgeTone}>{change}</Badge>
+        {note ? <span>{note}</span> : null}
+      </div>
+    </Card>
+  )
+}
+
+function DashboardPage() {
+  return (
+    <>
+      <section className="dashboard-hero">
+        <p className="eyebrow">Financial Overview</p>
+        <h1>
+          Control your money
+          <br />
+          with clarity.
+        </h1>
+        <p className="page-lede">
+          Track your balance, monitor expenses, and grow your financial health with a cleaner,
+          smarter workflow.
+        </p>
+        <div className="hero-actions">
+          <ActionButton icon={Plus}>Add Transaction</ActionButton>
+          <ActionButton icon={BarChart3} variant="secondary">
+            Analytics
+          </ActionButton>
+        </div>
+      </section>
+
+      <div className="dashboard-feature-grid">
+        <Card className="balance-feature">
+          <p className="card-kicker">Available Balance</p>
+          <h2>Rp12.450.000</h2>
+          <Badge>+18.2% this month</Badge>
+        </Card>
+        <Card className="savings-feature">
+          <p className="card-kicker">Savings Goal</p>
+          <h2>72%</h2>
+          <div className="progress-track">
+            <span style={{ width: '72%' }} />
+          </div>
+          <p>You are on track to reach your emergency fund target.</p>
+        </Card>
+      </div>
+
+      <div className="dashboard-stat-grid">
+        {dashboardStats.map((item) => (
+          <Card className="dashboard-stat" key={item.title}>
+            <div className="stat-row">
+              <IconTile icon={item.icon} tone={item.tone} />
+              <div>
+                <p>{item.title}</p>
+                <strong>{item.value}</strong>
+              </div>
+              <button aria-label={`Open ${item.title}`} className="round-icon-button" type="button">
+                <ArrowRight size={18} />
+              </button>
+            </div>
+            <Badge tone={item.tone === 'red' ? 'red' : 'green'}>{item.change}</Badge>
+          </Card>
+        ))}
+      </div>
+    </>
+  )
+}
+
+function TransactionsPage() {
+  return (
+    <>
+      <PageHeader
+        action={<ActionButton icon={Plus}>Add Transaction</ActionButton>}
+        description="Track every expense, income, and recurring payment in one clean workspace."
+        eyebrow="Transaction History"
+        title="Manage your cash flow."
+      />
+
+      <div className="toolbar-row">
+        <label className="search-field">
+          <Search size={22} />
+          <input placeholder="Search transactions..." type="text" />
+        </label>
+        <ActionButton icon={Funnel} variant="secondary">
+          Filter
+        </ActionButton>
+      </div>
+
+      <div className="three-grid">
+        <MetricCard icon={TrendingUp} title="Total Income" value="Rp8.2M" change="+8.1%" note="this month" />
+        <MetricCard icon={TrendingDown} title="Total Expenses" value="Rp3.8M" change="-2.4%" note="this month" tone="red" />
+        <Card className="metric-card">
+          <div className="metric-main">
+            <div>
+              <p className="muted-label">Savings Rate</p>
+              <h3>72%</h3>
+            </div>
+            <IconTile icon={Target} />
+          </div>
+          <div className="progress-track short">
+            <span style={{ width: '72%' }} />
+          </div>
+          <p className="soft-note">of income saved</p>
+        </Card>
+      </div>
+
+      <TransactionTable />
+    </>
+  )
+}
+
+function TransactionTable() {
+  return (
+    <Card className="table-card">
+      <div className="table-heading">
+        <div>
+          <h2>Latest Transactions</h2>
+          <p>Your recent financial activity.</p>
+        </div>
+        <button aria-label="More transaction actions" className="square-button" type="button">
+          <Ellipsis size={22} />
+        </button>
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Transaction</th>
+              <th>Category</th>
+              <th>Date</th>
+              <th>Amount</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((item) => (
+              <tr key={item.name}>
+                <td>
+                  <div className="entity-cell">
+                    <IconTile icon={item.positive ? ArrowUpRight : ArrowDownRight} tone={item.positive ? 'green' : 'gray'} size={19} />
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.detail}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <Badge tone={item.positive ? 'green' : 'gray'}>{item.category}</Badge>
+                </td>
+                <td>{item.date}</td>
+                <td className={item.positive ? 'positive-text' : ''}>{item.amount}</td>
+                <td>
+                  <ChevronRight size={18} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  )
+}
+
+function AnalyticsPage() {
+  return (
+    <>
+      <PageHeader
+        action={
+          <ActionButton icon={Calendar} variant="secondary">
+            May 1 - May 31, 2024 <ChevronDown size={16} />
+          </ActionButton>
+        }
+        description="Explore your income, expenses, and spending habits with insightful charts and trends."
+        eyebrow="Analytics Overview"
+        title="Understand your financial performance."
+      />
+
+      <div className="analytics-grid">
+        <MetricCard icon={ArrowDownRight} title="Total Spending" value="Rp3.850.000" change="-2.4%" note="vs last month" tone="red" />
+        <MetricCard icon={TrendingUp} title="Total Income" value="Rp8.200.000" change="+8.1%" note="vs last month" />
+        <MetricCard icon={Target} title="Savings Rate" value="72%" change="+5%" note="vs last month" />
+        <MetricCard icon={TrendingUp} title="Investment Growth" value="Rp2.450.000" change="+12.7%" note="vs last month" />
+      </div>
+
+      <div className="chart-grid">
+        <Card className="chart-card chart-card--wide">
+          <div className="section-top">
+            <h2>Income vs Expense</h2>
+            <button className="mini-select" type="button">
+              Monthly <ChevronDown size={15} />
+            </button>
+          </div>
+          <LineChart />
+        </Card>
+        <Card className="chart-card">
+          <h2>Expense Breakdown</h2>
+          <div className="donut-layout">
+            <div className="donut">
+              <div>
+                <strong>Rp3.850.000</strong>
+                <span>Total Expense</span>
+              </div>
+            </div>
+            <div className="legend-list">
+              {[
+                ['Food & Drink', '32%', '#75d84c'],
+                ['Bills & Utilities', '22%', '#ffbd59'],
+                ['Transport', '15%', '#87d0df'],
+                ['Shopping', '12%', '#8f91ef'],
+                ['Entertainment', '10%', '#55c5df'],
+                ['Others', '9%', '#8bb9df'],
+              ].map(([label, value, color]) => (
+                <div className="legend-item" key={label}>
+                  <span style={{ background: color }} />
+                  <p>{label}</p>
+                  <strong>{value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+        <Card className="chart-card chart-card--wide">
+          <h2>Spending Heatmap</h2>
+          <Heatmap />
+        </Card>
+        <InsightCard compact />
+      </div>
+    </>
+  )
+}
+
+function LineChart() {
+  return (
+    <div className="line-chart-wrap">
+      <div className="chart-legend">
+        <span className="green-dot" /> Income
+        <span className="red-dot" /> Expense
+      </div>
+      <svg className="line-chart" viewBox="0 0 690 230" role="img" aria-label="Income and expense line chart">
+        <defs>
+          <linearGradient id="incomeFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#9fe870" stopOpacity="0.33" />
+            <stop offset="100%" stopColor="#9fe870" stopOpacity="0.04" />
+          </linearGradient>
+          <linearGradient id="expenseFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#ff4d4f" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#ff4d4f" stopOpacity="0.03" />
+          </linearGradient>
+        </defs>
+        {[30, 80, 130, 180].map((y) => (
+          <line key={y} x1="68" x2="660" y1={y} y2={y} stroke="#e8ebe6" />
+        ))}
+        <path d="M68 168 C130 176 146 174 190 160 C245 139 248 71 315 72 C388 72 397 88 450 92 C512 102 545 170 604 150 C632 141 646 111 660 96 L660 210 L68 210 Z" fill="url(#incomeFill)" />
+        <path d="M68 168 C132 175 164 178 210 160 C260 142 304 127 350 142 C410 158 470 178 525 171 C582 165 620 148 660 128 L660 210 L68 210 Z" fill="url(#expenseFill)" />
+        <path d="M68 168 C130 176 146 174 190 160 C245 139 248 71 315 72 C388 72 397 88 450 92 C512 102 545 170 604 150 C632 141 646 111 660 96" fill="none" stroke="#69c94b" strokeWidth="4" />
+        <path d="M68 168 C132 175 164 178 210 160 C260 142 304 127 350 142 C410 158 470 178 525 171 C582 165 620 148 660 128" fill="none" stroke="#ff3030" strokeWidth="4" />
+        {[68, 190, 315, 450, 604, 660].map((x, index) => (
+          <circle cx={x} cy={[168, 160, 72, 92, 150, 96][index]} fill="#fff" key={x} r="5" stroke="#69c94b" strokeWidth="3" />
+        ))}
+        {[68, 210, 350, 525, 660].map((x, index) => (
+          <circle cx={x} cy={[168, 160, 142, 171, 128][index]} fill="#fff" key={x} r="5" stroke="#ff3030" strokeWidth="3" />
+        ))}
+        {['Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May'].map((month, index) => (
+          <text fill="#637083" fontSize="14" key={month} x={72 + index * 116} y="226">
+            {month}
+          </text>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function Heatmap() {
+  const levels = [0.12, 0.2, 0.33, 0.46, 0.55, 0.71, 0.2, 0.36, 0.48, 0.61, 0.78, 0.9]
+
+  return (
+    <div className="heatmap-shell">
+      <div className="heatmap-labels">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+          <span key={day}>{day}</span>
+        ))}
+      </div>
+      <div className="heatmap-grid">
+        {Array.from({ length: 84 }).map((_, index) => (
+          <span
+            aria-label={`Spending level ${index + 1}`}
+            key={`heat-${index}`}
+            style={{ background: `rgba(112, 210, 71, ${levels[(index * 5) % levels.length]})` }}
+          />
+        ))}
+      </div>
+      <div className="heatmap-scale">
+        <span>Low Spending</span>
+        {[0.14, 0.22, 0.34, 0.48, 0.62, 0.8, 1].map((level) => (
+          <i key={level} style={{ background: `rgba(112, 210, 71, ${level})` }} />
+        ))}
+        <span>High Spending</span>
+      </div>
+    </div>
+  )
+}
+
+function RecurringPage() {
+  return (
+    <>
+      <PageHeader
+        action={<ActionButton icon={Plus}>Add Recurring</ActionButton>}
+        description="Track and manage all your subscriptions and recurring bills in one place."
+        eyebrow="Recurring Payments"
+        title="Manage your recurring payments."
+      />
+
+      <div className="analytics-grid">
+        <MetricCard icon={Calendar} title="Total Monthly Commitment" value="Rp1.245.000" change="-4.2%" note="vs last month" />
+        <MetricCard icon={Repeat} title="Active Subscriptions" value="8" change="No change" />
+        <MetricCard icon={Clock} title="Due This Month" value="Rp1.245.000" change="5 payments" tone="orange" />
+        <MetricCard icon={TrendingUp} title="Annual Amount" value="Rp14.940.000" change="-6.8%" note="vs last year" />
+      </div>
+
+      <div className="recurring-tools">
+        <div className="segmented">
+          {['All', 'Subscriptions', 'Bills', 'Loans', 'Insurance'].map((tab) => (
+            <button className={tab === 'All' ? 'active' : ''} key={tab} type="button">
+              {tab}
+            </button>
+          ))}
+        </div>
+        <label className="search-field compact">
+          <Search size={20} />
+          <input placeholder="Search recurring..." type="text" />
+        </label>
+        <ActionButton icon={Funnel} variant="secondary">
+          Filter
+        </ActionButton>
+      </div>
+
+      <Card className="table-card recurring-table">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Merchant / Service</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Frequency</th>
+                <th>Next Payment</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recurringRows.map(([name, detail, category, amount, frequency, date, status, brand]) => (
+                <tr key={name}>
+                  <td>
+                    <div className="entity-cell">
+                      <div className={cx('brand-mark', `brand-mark--${brand}`)}>{brandLabel(brand)}</div>
+                      <div>
+                        <strong>{name}</strong>
+                        <span>{detail}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <Badge tone={category === 'Bill' ? 'blue' : 'green'}>{category}</Badge>
+                  </td>
+                  <td>
+                    <strong>{amount}</strong>
+                  </td>
+                  <td>{frequency}</td>
+                  <td>{date}</td>
+                  <td>
+                    <Badge>{status}</Badge>
+                  </td>
+                  <td>
+                    <Ellipsis size={18} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="savings-banner">
+          <IconTile icon={HandCoins} />
+          <div>
+            <strong>You can save up to Rp320.000/month by reviewing unused subscriptions.</strong>
+            <span>Review your subscriptions and cancel what you don't use.</span>
+          </div>
+          <ActionButton icon={ArrowRight}>Review Subscriptions</ActionButton>
+        </div>
+      </Card>
+    </>
+  )
+}
+
+function brandLabel(brand) {
+  const labels = {
+    spotify: 'S',
+    netflix: 'N',
+    pln: 'PLN',
+    indihome: 'IN',
+    adobe: 'CC',
+  }
+
+  return labels[brand] || 'M'
+}
+
+function AIAssistantPage() {
+  return (
+    <>
+      <PageHeader
+        action={<ActionButton icon={Plus}>New Chat</ActionButton>}
+        description="Get personalized insights, ask questions, and improve your financial health with AI."
+        eyebrow="AI Assistant"
+        title="Your smart financial assistant."
+      />
+
+      <div className="analytics-grid">
+        <MetricCard icon={TrendingUp} title="Money Saved This Month" value="Rp320.000" change="18% vs last month" />
+        <MetricCard icon={Lightbulb} title="Top Insight" value="Food & Drink" change="24% this week" tone="orange" />
+        <MetricCard icon={Target} title="Financial Health Score" value="82/100" change="Good" />
+        <MetricCard icon={Bot} title="Questions Asked" value="12" change="This month" tone="blue" />
+      </div>
+
+      <div className="assistant-grid">
+        <Card className="assistant-chat">
+          <div className="assistant-title">
+            <IconTile icon={Bot} />
+            <div>
+              <h2>MoneyPulse Assistant</h2>
+              <p>Ask me anything about your finances.</p>
+            </div>
+          </div>
+          <div className="chat-bubble-row">
+            <IconTile icon={Bot} />
+            <div className="chat-bubble">Hi! How can I help you today?</div>
+          </div>
+          {[
+            ['How can I reduce my monthly expenses?', TrendingUp],
+            ['Where did I spend the most this week?', Clock],
+            ['How can I reach my savings goal faster?', Target],
+            ['Show me my spending trend this month.', BarChart3],
+          ].map(([question, Icon]) => (
+            <button className="prompt-row" key={question} type="button">
+              <IconTile icon={Icon} tone="soft" size={17} />
+              <span>{question}</span>
+              <ChevronRight size={18} />
+            </button>
+          ))}
+          <label className="chat-input">
+            <input placeholder="Ask anything about your finances..." type="text" />
+            <button aria-label="Send message" type="button">
+              <Send size={22} />
+            </button>
+          </label>
+        </Card>
+
+        <div className="assistant-side">
+          <InsightCard />
+          <Card className="quick-actions">
+            <p className="card-kicker">Quick Actions</p>
+            <div>
+              <ActionButton icon={ReceiptText} variant="secondary">
+                Analyze Spending
+              </ActionButton>
+              <ActionButton icon={Wallet} variant="secondary">
+                Budget Review
+              </ActionButton>
+              <ActionButton icon={FileText} variant="secondary">
+                Expense Report
+              </ActionButton>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </>
+  )
+}
+
+function InsightCard({ compact = false }) {
+  return (
+    <Card className={cx('insight-card', compact && 'insight-card--compact')}>
+      <div>
+        <p className="eyebrow">AI Insight</p>
+        <h2>
+          You spent <span>24%</span> more on
+          <br />
+          Food & Drink this week.
+        </h2>
+        {!compact ? <p>That's Rp180.000 more than last week.</p> : null}
+        <div className="insight-savings">
+          <IconTile icon={Sparkles} />
+          <div>
+            <small>Potential Monthly Savings</small>
+            <strong>Rp320.000</strong>
+          </div>
+        </div>
+      </div>
+      <div className="wallet-illustration">
+        <span />
+        <i />
+        <b />
+      </div>
+      {!compact ? (
+        <ActionButton icon={ChevronRight}>View Details</ActionButton>
+      ) : null}
+    </Card>
+  )
+}
+
+function SettingsPage({ activeSetting, setActiveSetting }) {
+  const isNotifications = activeSetting === 'Notifications'
+
+  return (
+    <>
+      <PageHeader
+        action={
+          <ActionButton icon={isNotifications ? null : ShieldCheck}>
+            {isNotifications ? 'Save Changes' : 'Security Check'}
+          </ActionButton>
+        }
+        description={
+          isNotifications
+            ? 'Choose what updates you want to receive and how you want to be notified.'
+            : 'Customize your experience, manage your account, and keep your data secure.'
+        }
+        eyebrow={isNotifications ? 'Settings / Notifications' : 'Settings'}
+        title={isNotifications ? 'Manage your notifications.' : 'Manage your preferences.'}
+      />
+      <div className="settings-layout">
+        <Card className="settings-nav-card">
+          {settingsTabs.map(([label, description, Icon]) => (
+            <button
+              className={activeSetting === label ? 'active' : ''}
+              key={label}
+              onClick={() => setActiveSetting(label)}
+              type="button"
+            >
+              <Icon size={22} />
+              <span>
+                <strong>{label}</strong>
+                <small>{description}</small>
+              </span>
+            </button>
+          ))}
+        </Card>
+        <div className="settings-content">{renderSettingsContent(activeSetting)}</div>
+      </div>
+    </>
+  )
+}
+
+function renderSettingsContent(activeSetting) {
+  switch (activeSetting) {
+    case 'Notifications':
+      return <NotificationsSettings />
+    case 'Appearance':
+      return <AppearanceSettings />
+    case 'Security':
+      return <SecuritySettings />
+    case 'Accounts':
+      return <AccountsSettings />
+    case 'Data & Privacy':
+      return <PrivacySettings />
+    case 'About':
+      return <AboutSettings />
+    default:
+      return <ProfileSettings />
+  }
+}
+
+function SettingsPanel({ children, className = '', subtitle, title }) {
+  return (
+    <Card className={cx('settings-panel', className)}>
+      {title ? (
+        <div className="settings-panel-head">
+          <div>
+            <h2>{title}</h2>
+            {subtitle ? <p>{subtitle}</p> : null}
+          </div>
+        </div>
+      ) : null}
+      {children}
+    </Card>
+  )
+}
+
+function ProfileSettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="Update your personal details and preferences." title="Profile Information">
+        <div className="profile-card-row">
+          <div className="profile-avatar">
+            M
+            <button aria-label="Change profile photo" type="button">
+              <Camera size={15} />
+            </button>
+          </div>
+          <div>
+            <h3>Jackson M. Tambun</h3>
+            <p>jackson.tambun@email.com</p>
+          </div>
+          <ActionButton icon={PenLine} variant="secondary">
+            Edit Profile
+          </ActionButton>
+        </div>
+        <div className="split-detail">
+          <div>
+            <span>Phone Number</span>
+            <strong>+62 812 3456 7890</strong>
+          </div>
+          <div>
+            <span>Member Since</span>
+            <strong>March 15, 2024</strong>
+          </div>
+        </div>
+      </SettingsPanel>
+
+      <div className="three-grid compact-grid">
+        <ChoiceCard title="Currency" subtitle="Set your default currency." value="Indonesian Rupiah (IDR)" icon={CircleDollarSign} />
+        <ChoiceCard title="Language" subtitle="Choose your preferred language." value="English" icon={GlobeIcon} />
+        <ChoiceCard title="Date Format" subtitle="Choose how dates are displayed." value="May 31, 2024" icon={Calendar} />
+      </div>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Adjust your app preferences." title="Preferences">
+          <ToggleRow icon={TrendingUp} label="Budget Alerts" note="Get notified when you're close to your budget limit." />
+          <ToggleRow icon={Bell} label="Weekly Summary" note="Receive weekly financial summary." />
+          <ToggleRow checked={false} icon={Mail} label="Marketing Updates" note="Receive news and updates from MoneyPulse." />
+        </SettingsPanel>
+        <SettingsPanel subtitle="Keep your account secure." title="Security Overview">
+          <SettingListRow icon={LockKeyhole} label="Password" meta="Last updated 2 months ago" status="Strong" />
+          <SettingListRow icon={ShieldCheck} label="Two-Factor Authentication" meta="Enabled" status="Active" />
+          <SettingListRow icon={Monitor} label="Active Sessions" meta="3 devices" />
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function ChoiceCard({ title, subtitle, value, icon: Icon }) {
+  return (
+    <Card className="choice-card">
+      <h2>{title}</h2>
+      <p>{subtitle}</p>
+      <button type="button">
+        <IconTile icon={Icon} size={18} />
+        <strong>{value}</strong>
+        <ChevronDown size={17} />
+      </button>
+    </Card>
+  )
+}
+
+function NotificationsSettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="Select how you want to receive notifications." title="Notification Channels">
+        <ToggleRow icon={Monitor} label="In-App Notifications" note="Receive alerts inside the MoneyPulse app." />
+        <ToggleRow icon={Mail} label="Email Notifications" note="Receive updates via your email." />
+        <ToggleRow icon={Smartphone} label="Push Notifications" note="Receive push notifications on your device." />
+      </SettingsPanel>
+      <SettingsPanel className="notification-preferences" subtitle="Choose the updates you want to receive." title="Notification Preferences">
+        <div>
+          <ToggleRow icon={ReceiptText} label="Transaction Alerts" note="Get notified about income, expenses, and transfers." />
+          <ToggleRow icon={TrendingUp} label="Budget Alerts" note="Get notified when you're close to or exceed your budget limit." />
+          <ToggleRow icon={Calendar} label="Bill Reminders" note="Receive reminders before your bills are due." />
+          <ToggleRow icon={Goal} label="Savings Goals" note="Get updates about your savings goal progress." />
+          <ToggleRow checked={false} icon={BadgeCheck} label="Product Updates" note="Receive updates about new features and improvements." />
+        </div>
+        <div className="notification-art">
+          <div className="notification-bell">
+            <Bell size={64} />
+            <span>1</span>
+          </div>
+          <h3>Stay informed, stay in control.</h3>
+          <p>We'll only send you important updates to help you manage your finances better.</p>
+        </div>
+      </SettingsPanel>
+    </>
+  )
+}
+
+function AppearanceSettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="Customize how MoneyPulse looks and feels for you." title="Appearance Settings">
+        <div className="theme-options">
+          {[
+            ['Light', 'Clean and bright', Sun, true],
+            ['Dark', 'Easy on the eyes', Moon],
+            ['System', 'Use system settings', Monitor],
+          ].map(([title, subtitle, Icon, active]) => (
+            <button className={active ? 'active' : ''} key={title} type="button">
+              <IconTile icon={Icon} tone={title === 'System' ? 'orange' : 'soft'} />
+              <strong>{title}</strong>
+              <span>{subtitle}</span>
+              {active ? <Check className="theme-check" size={19} /> : null}
+            </button>
+          ))}
+        </div>
+      </SettingsPanel>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Choose your accent color." title="Primary Color">
+          <div className="swatches">
+            {['#74d94a', '#2f87df', '#7d3fdb', '#ff9129', '#ed3869'].map((color, index) => (
+              <button className={index === 0 ? 'active' : ''} key={color} style={{ background: color }} type="button" />
+            ))}
+          </div>
+        </SettingsPanel>
+        <SettingsPanel subtitle="Adjust the size of text across the app." title="Font Size">
+          <div className="font-slider">
+            <span>Aa</span>
+            <div>
+              <i />
+            </div>
+            <strong>Aa</strong>
+          </div>
+        </SettingsPanel>
+      </div>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Customize the information density and layout." title="Display Preferences">
+          <ToggleRow checked={false} icon={ListIcon} label="Compact Mode" note="Show more information in less space." />
+          <ToggleRow icon={Sparkles} label="Show Chart Animations" note="Enable smooth animations in charts and graphs." />
+          <ToggleRow icon={Lightbulb} label="Show Financial Tips" note="Display helpful tips and insights on dashboard." />
+        </SettingsPanel>
+        <SettingsPanel subtitle="This is how your dashboard will look." title="Preview">
+          <div className="preview-board">
+            <div />
+            <div />
+            <div>
+              <span />
+              <span />
+              <span />
+              <span />
+            </div>
+            <div className="mini-chart">
+              <svg viewBox="0 0 180 110">
+                <path d="M4 78 C28 40 45 96 72 62 C96 33 114 61 139 41 C155 28 165 37 176 14" fill="none" stroke="#69c94b" strokeWidth="4" />
+              </svg>
+            </div>
+            <div className="mini-donut" />
+          </div>
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function SecuritySettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="Keep your account and data protected." title="Security Overview">
+        <div className="overview-grid">
+          <OverviewItem icon={ShieldCheck} label="Password" value="Strong" />
+          <OverviewItem icon={LockKeyhole} label="Two-Factor Auth" value="Active" />
+          <OverviewItem icon={Monitor} label="Active Sessions" value="3 devices" />
+          <OverviewItem icon={Clock} label="Last Security Check" value="2 days ago" />
+        </div>
+      </SettingsPanel>
+
+      <SettingsPanel subtitle="Update your password regularly to keep your account secure." title="Password">
+        <div className="password-grid">
+          <div className="password-strength">
+            <span>Password Strength</span>
+            <strong>Strong</strong>
+            <div>
+              <i />
+              <i />
+              <i />
+              <em />
+            </div>
+            <p>Last changed 2 months ago</p>
+          </div>
+          <div className="tips-list">
+            {['Use at least 8 characters', 'Mix of letters, numbers, and symbols', 'Avoid using personal information'].map((tip) => (
+              <p key={tip}>
+                <CircleCheck size={16} /> {tip}
+              </p>
+            ))}
+          </div>
+          <ActionButton icon={PenLine} variant="secondary">
+            Change Password
+          </ActionButton>
+        </div>
+      </SettingsPanel>
+
+      <SettingsPanel subtitle="Add an extra layer of security to your account." title="Two-Factor Authentication">
+        <div className="security-strip">
+          <IconTile icon={ShieldCheck} />
+          <div>
+            <strong>2FA is enabled</strong>
+            <p>Your account is protected with two-factor authentication.</p>
+          </div>
+          <ActionButton icon={ChevronRight} variant="secondary">
+            Manage 2FA
+          </ActionButton>
+        </div>
+      </SettingsPanel>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Manage your active sessions across devices." title="Active Sessions">
+          {[
+            ['MacBook Pro', 'Jakarta, Indonesia', 'Current'],
+            ['iPhone 14 Pro', 'Jakarta, Indonesia', '2 hours ago'],
+            ['Windows PC', 'Bandung, Indonesia', '1 day ago'],
+          ].map(([device, location, time], index) => (
+            <SettingListRow icon={index === 1 ? Smartphone : Laptop} key={device} label={device} meta={location} status={time} />
+          ))}
+        </SettingsPanel>
+        <SettingsPanel subtitle="Review your recent security-related activities." title="Recent Security Activity">
+          {['Password changed', 'Two-factor authentication enabled', 'New login detected (iPhone 14 Pro)'].map((item) => (
+            <SettingListRow icon={ShieldCheck} key={item} label={item} meta="January 12, 2024 at 02:18 PM" status="OK" />
+          ))}
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function AccountsSettings() {
+  const accounts = [
+    ['Bank BCA', '**** **** **** 1234', 'Rp8.450.000', 'Checking Account', 'Active', Landmark, 'green'],
+    ['Bank Mandiri', '**** **** **** 5678', 'Rp3.250.000', 'Savings Account', 'Active', CircleDollarSign, 'blue'],
+    ['OVO', '**** **** **** 9012', 'Rp520.000', 'E-Wallet', 'Active', WalletCards, 'purple'],
+    ['ShopeePay', '**** **** **** 3456', 'Rp180.000', 'E-Wallet', 'Inactive', Wallet, 'orange'],
+  ]
+
+  return (
+    <>
+      <SettingsPanel subtitle="Connect your bank and financial accounts to track your finances in one place." title="Linked Accounts">
+        <div className="panel-action-top">
+          <ActionButton icon={Plus} variant="secondary">
+            Link Account
+          </ActionButton>
+        </div>
+        <div className="account-list">
+          {accounts.map(([name, number, amount, type, status, Icon, tone]) => (
+            <div className="account-row" key={name}>
+              <IconTile icon={Icon} tone={tone} />
+              <div>
+                <strong>{name}</strong>
+                <span>{number}</span>
+              </div>
+              <div>
+                <strong>{amount}</strong>
+                <span>{type}</span>
+              </div>
+              <Badge tone={status === 'Active' ? 'green' : 'gray'}>{status}</Badge>
+              <ChevronRight size={18} />
+            </div>
+          ))}
+        </div>
+        <div className="settings-foot-link">
+          <span>Showing 4 of 6 accounts</span>
+          <button type="button">View All Accounts <ChevronRight size={16} /></button>
+        </div>
+      </SettingsPanel>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Overview of your linked accounts." title="Account Summary">
+          <div className="summary-card-inner">
+            <IconTile icon={WalletCards} />
+            <span>Total Balance</span>
+            <strong>Rp12.400.000</strong>
+            <Badge>+12.5% this month</Badge>
+          </div>
+          <SettingListRow icon={CircleCheck} label="Active Accounts" status="4" />
+          <SettingListRow icon={Info} label="Inactive Accounts" status="2" />
+          <SettingListRow icon={Clock} label="Last Updated" status="2 min ago" />
+        </SettingsPanel>
+        <SettingsPanel subtitle="Manage how your accounts are displayed and synced." title="Account Management">
+          <ToggleRow icon={RefreshCw} label="Auto Sync" note="Automatically sync your account data." />
+          <ToggleRow checked={false} icon={ShieldCheck} label="Hide Zero Balance Accounts" note="Hide accounts with zero balance." />
+          <SettingListRow icon={RefreshCw} label="Refresh All Accounts" meta="Last synced 2 minutes ago" />
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function PrivacySettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="You're in control of your data. Manage, export, or delete your information anytime." title="Data & Privacy Overview">
+        <div className="overview-grid">
+          <OverviewItem icon={FileText} label="Data Categories" value="12" />
+          <OverviewItem icon={LockKeyhole} label="Data Encrypted" value="100%" />
+          <OverviewItem icon={ShieldCheck} label="You're in Control" value="Manage your data" />
+          <OverviewItem icon={RefreshCw} label="Last Export" value="May 15, 2024" />
+        </div>
+      </SettingsPanel>
+
+      <SettingsPanel subtitle="Download a copy of all your data. You'll receive an email when it's ready." title="Export Your Data">
+        <div className="panel-action-top">
+          <ActionButton icon={Download} variant="secondary">
+            Export Data
+          </ActionButton>
+        </div>
+        <div className="export-row">
+          <IconTile icon={FileText} />
+          <div>
+            <strong>Complete Data Export</strong>
+            <span>Includes transactions, accounts, budgets, and more.</span>
+          </div>
+          <div>
+            <span>Estimated time</span>
+            <strong>Up to 24 hours</strong>
+          </div>
+        </div>
+      </SettingsPanel>
+
+      <div className="two-grid">
+        <SettingsPanel subtitle="Manage how your data is used and shared." title="Privacy Controls">
+          <SettingListRow icon={Info} label="Data Usage" meta="Control how we use your data to improve your experience." />
+          <SettingListRow icon={Mail} label="Marketing Preferences" meta="Manage how we communicate with you." status="Opted In" />
+          <SettingListRow icon={ShieldCheck} label="Third-Party Access" meta="Manage connected apps and data sharing permissions." />
+        </SettingsPanel>
+        <SettingsPanel subtitle="Permanently delete your account and all associated data. This action cannot be undone." title="Delete Your Data">
+          <div className="danger-callout">
+            <IconTile icon={Trash2} tone="red" />
+            <div>
+              <strong>Delete Account</strong>
+              <span>All your data will be permanently removed.</span>
+            </div>
+          </div>
+          <button className="danger-button" type="button">
+            Delete My Account
+          </button>
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function AboutSettings() {
+  return (
+    <>
+      <SettingsPanel subtitle="Your all-in-one personal finance OS to help you take control of your money and build a better financial future." title="About MoneyPulse">
+        <div className="about-brand">
+          <div className="logo-mark">M</div>
+          <div>
+            <h3>MoneyPulse <Badge>Current Version</Badge></h3>
+            <p>Version 2.1.0 - Build 21052024</p>
+          </div>
+          <ActionButton icon={RefreshCw} variant="secondary">
+            Check for Updates
+          </ActionButton>
+        </div>
+        <div className="mission-grid">
+          <MiniInfo icon={ShieldCheck} title="Our Mission" text="Empower everyone to make smarter financial decisions." />
+          <MiniInfo icon={LockKeyhole} title="Your Privacy" text="We value your privacy and never sell your personal data." />
+          <MiniInfo icon={Sparkles} title="Smart & Secure" text="Advanced security and AI insights to keep finances on track." />
+          <MiniInfo icon={BadgeCheck} title="Made for You" text="Designed with simplicity and clarity to make finance effortless." />
+        </div>
+      </SettingsPanel>
+
+      <div className="about-grid">
+        <SettingsPanel>
+          <SettingListRow icon={SquareArrowOutUpRight} label="Website" meta="Visit our official website." status="moneypulse.app" />
+          <SettingListRow icon={Info} label="Help Center" meta="Browse help articles and guides." status="Go to Help Center" />
+          <SettingListRow icon={Mail} label="Contact Us" meta="Get in touch with our support team." status="support@moneypulse.app" />
+          <SettingListRow icon={FileText} label="Terms of Service" meta="Read our terms and conditions." status="View Terms" />
+          <SettingListRow icon={ShieldCheck} label="Privacy Policy" meta="Learn how we collect and protect your data." status="View Privacy Policy" />
+          <SettingListRow icon={Sparkles} label="Open Source Licenses" meta="View third-party open source licenses." status="View Licenses" />
+        </SettingsPanel>
+        <SettingsPanel subtitle="See what's new in the latest update." title="What's New">
+          <div className="release-note">
+            <Badge>New</Badge>
+            <div>
+              <strong>Version 2.1.0</strong>
+              <span>May 20, 2024</span>
+            </div>
+          </div>
+          <MiniInfo icon={Sparkles} title="AI Insights Dashboard" text="Get smarter insights and personalized recommendations." />
+          <MiniInfo icon={Repeat} title="Recurring Enhancements" text="More control and flexibility for recurring transactions." />
+          <MiniInfo icon={RefreshCw} title="Performance Improvements" text="Faster, smoother, and more reliable experience." />
+        </SettingsPanel>
+      </div>
+    </>
+  )
+}
+
+function OverviewItem({ icon, label, value }) {
+  return (
+    <div className="overview-item">
+      <IconTile icon={icon} />
+      <span>{value}</span>
+      <p>{label}</p>
+    </div>
+  )
+}
+
+function MiniInfo({ icon, title, text }) {
+  return (
+    <div className="mini-info">
+      <IconTile icon={icon} />
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
+      </div>
+    </div>
+  )
+}
+
+function ToggleRow({ checked = true, icon, label, note }) {
+  return (
+    <div className="toggle-row">
+      <IconTile icon={icon} />
+      <div>
+        <strong>{label}</strong>
+        <span>{note}</span>
+      </div>
+      <button aria-pressed={checked} className={cx('toggle', checked && 'is-on')} type="button">
+        <i />
+      </button>
+    </div>
+  )
+}
+
+function SettingListRow({ icon, label, meta, status }) {
+  return (
+    <div className="setting-list-row">
+      <IconTile icon={icon} size={17} />
+      <div>
+        <strong>{label}</strong>
+        {meta ? <span>{meta}</span> : null}
+      </div>
+      {status ? <Badge>{status}</Badge> : null}
+      <ChevronRight size={17} />
+    </div>
+  )
+}
+
+function GlobeIcon(props) {
+  return <CircleDollarSign {...props} />
+}
+
+function ListIcon(props) {
+  return <LayoutDashboard {...props} />
+}
+
+export default function App() {
+  const [activePage, setActivePage] = useState('Dashboard')
+  const [activeSetting, setActiveSetting] = useState('Profile')
+
+  function handleNavigate(label) {
+    const target = navIntents[label]
+    setActivePage(target.page)
+    setActiveSetting(target.setting)
+  }
+
+  return (
+    <div className="app-shell">
+      <Sidebar activePage={activePage} onNavigate={handleNavigate} />
+      <main className="main-panel">
+        <div className="page-frame">
+          {activePage === 'Dashboard' ? <DashboardPage /> : null}
+          {activePage === 'Transactions' ? <TransactionsPage /> : null}
+          {activePage === 'Analytics' ? <AnalyticsPage /> : null}
+          {activePage === 'Recurring' ? <RecurringPage /> : null}
+          {activePage === 'AI Assistant' ? <AIAssistantPage /> : null}
+          {activePage === 'Settings' ? (
+            <SettingsPage activeSetting={activeSetting} setActiveSetting={setActiveSetting} />
+          ) : null}
+        </div>
+      </main>
+    </div>
+  )
+}
