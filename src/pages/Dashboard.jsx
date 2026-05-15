@@ -1,109 +1,30 @@
 // src/pages/Dashboard.jsx
+// Full Tailwind refactor — zero custom CSS
+
 import { useState } from 'react'
-
-// Simple components tanpa import dari common
-function ActionButton({ children, icon: Icon, variant = 'primary', onClick }) {
-  return (
-    <button 
-      className={`action-button action-button--${variant}`} 
-      type="button"
-      onClick={onClick}
-    >
-      {Icon && <Icon size={18} />}
-      <span>{children}</span>
-    </button>
-  )
-}
-
-function Badge({ children, tone = 'green' }) {
-  return <span className={`badge badge--${tone}`}>{children}</span>
-}
-
-function IconTile({ icon: Icon, tone = 'green', size = 24 }) {
-  return (
-    <div className={`icon-tile icon-tile--${tone}`}>
-      <Icon size={size} />
-    </div>
-  )
-}
-
-// Import icons
-import { 
-  ArrowDownRight, 
-  ArrowRight, 
-  ArrowUpRight, 
-  BarChart3, 
-  Plus, 
-  TrendingUp, 
-  WalletCards,
-  X
+import {
+  ArrowDownRight, ArrowRight, ArrowUpRight,
+  BarChart3, Plus, TrendingUp, WalletCards
 } from 'lucide-react'
+import {
+  Badge, Card, IconTile, ActionButton, Modal,
+  FormGroup, Input, Select, RoundIconButton
+} from '../components/common'
 
-export default function DashboardPage() {
-  const [transactions, setTransactions] = useState([
-    {
-      id: 1,
-      name: 'Freelance Payment',
-      detail: 'Payment received',
-      category: 'Income',
-      date: '2024-05-20',
-      formattedDate: 'May 20, 2024',
-      amount: 2500000,
-      formattedAmount: '+Rp2.500.000',
-      positive: true,
-    },
-    {
-      id: 2,
-      name: 'Coffee Shop',
-      detail: 'Food & Drink',
-      category: 'Food & Drink',
-      date: '2024-05-19',
-      formattedDate: 'May 19, 2024',
-      amount: -45000,
-      formattedAmount: '-Rp45.000',
-      positive: false,
-    },
-    {
-      id: 3,
-      name: 'Groceries',
-      detail: 'Supermarket',
-      category: 'Shopping',
-      date: '2024-05-18',
-      formattedDate: 'May 18, 2024',
-      amount: -230000,
-      formattedAmount: '-Rp230.000',
-      positive: false,
-    },
-  ])
-
-  const [showModal, setShowModal] = useState(false)
-  const [formName, setFormName] = useState('')
+// ─── Add Transaction Modal ───────────────────
+function AddTransactionModal({ isOpen, onClose, onAdd }) {
+  const [formName, setFormName]     = useState('')
   const [formAmount, setFormAmount] = useState('')
-  const [formType, setFormType] = useState('expense')
+  const [formType, setFormType]     = useState('expense')
   const [formDetail, setFormDetail] = useState('')
 
-  // Hitung total balance
-  const totalBalance = transactions.reduce((sum, t) => sum + t.amount, 0)
-  const monthlyIncome = transactions.filter(t => t.positive).reduce((sum, t) => sum + t.amount, 0)
-  const monthlyExpense = Math.abs(transactions.filter(t => !t.positive).reduce((sum, t) => sum + t.amount, 0))
-
-  const handleAddTransaction = (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault()
-    
-    if (!formName || !formAmount) {
-      alert('Please fill in name and amount')
-      return
-    }
-    
+    if (!formName || !formAmount) return alert('Please fill in name and amount')
     const amountNum = parseFloat(formAmount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Please enter a valid amount')
-      return
-    }
-    
+    if (isNaN(amountNum) || amountNum <= 0) return alert('Please enter a valid amount')
     const finalAmount = formType === 'expense' ? -Math.abs(amountNum) : Math.abs(amountNum)
-    
-    const newTransaction = {
+    onAdd({
       id: Date.now(),
       name: formName,
       detail: formDetail || '',
@@ -112,283 +33,203 @@ export default function DashboardPage() {
       formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       amount: finalAmount,
       formattedAmount: `${finalAmount > 0 ? '+' : '-'}Rp${Math.abs(finalAmount).toLocaleString('id-ID')}`,
-      positive: finalAmount > 0
-    }
-    
-    setTransactions([newTransaction, ...transactions])
-    setShowModal(false)
-    setFormName('')
-    setFormAmount('')
-    setFormType('expense')
-    setFormDetail('')
-    
-    alert('Transaction added successfully!')
+      positive: finalAmount > 0,
+    })
+    onClose()
+    setFormName(''); setFormAmount(''); setFormType('expense'); setFormDetail('')
   }
 
   return (
-    <>
-      {/* Modal */}
-      {showModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }} onClick={() => setShowModal(false)}>
-          <div style={{
-            background: 'white',
-            borderRadius: '24px',
-            padding: '32px',
-            width: '90%',
-            maxWidth: '500px'
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0 }}>Add Transaction</h2>
-              <button onClick={() => setShowModal(false)} style={{ cursor: 'pointer', fontSize: '24px', background: 'none', border: 'none' }}>✕</button>
-            </div>
-            
-            <form onSubmit={handleAddTransaction}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Type</label>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button 
-                    type="button"
-                    onClick={() => setFormType('expense')}
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: formType === 'expense' ? '#df1f27' : '#fee3e3',
-                      color: formType === 'expense' ? 'white' : '#df1f27',
-                      border: 'none',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    Expense
-                  </button>
-                  <button 
-                    type="button"
-                    onClick={() => setFormType('income')}
-                    style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: formType === 'income' ? '#23831c' : '#e2f6d5',
-                      color: formType === 'income' ? 'white' : '#23831c',
-                      border: 'none',
-                      borderRadius: '12px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    Income
-                  </button>
-                </div>
-              </div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  placeholder="e.g., Salary, Groceries"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '12px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Amount (IDR) *</label>
-                <input
-                  type="number"
-                  required
-                  value={formAmount}
-                  onChange={e => setFormAmount(e.target.value)}
-                  placeholder="0"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '12px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
-              
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Description (Optional)</label>
-                <input
-                  type="text"
-                  value={formDetail}
-                  onChange={e => setFormDetail(e.target.value)}
-                  placeholder="Additional notes"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid #ddd',
-                    borderRadius: '12px',
-                    fontSize: '16px'
-                  }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <button type="button" onClick={() => setShowModal(false)} style={{
-                  flex: 1,
-                  padding: '12px',
-                  border: '1px solid #ddd',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  background: 'white',
-                  fontWeight: 'bold'
-                }}>Cancel</button>
-                <button type="submit" style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: '#9fe870',
-                  border: 'none',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}>Add Transaction</button>
-              </div>
-            </form>
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Transaction">
+      <form onSubmit={handleSubmit}>
+        <FormGroup label="Transaction Type">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setFormType('expense')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'expense' ? 'bg-danger text-white' : 'bg-red-50 text-danger'}`}
+            >
+              Expense
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormType('income')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'income' ? 'bg-positive text-white' : 'bg-primary-pale text-positive'}`}
+            >
+              Income
+            </button>
           </div>
+        </FormGroup>
+        <FormGroup label="Name *">
+          <Input required value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g., Salary, Groceries" />
+        </FormGroup>
+        <FormGroup label="Amount (IDR) *">
+          <Input type="number" required value={formAmount} onChange={e => setFormAmount(e.target.value)} placeholder="0" />
+        </FormGroup>
+        <FormGroup label="Description">
+          <Input value={formDetail} onChange={e => setFormDetail(e.target.value)} placeholder="Additional notes" />
+        </FormGroup>
+        <div className="flex gap-3 mt-6">
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">
+            Cancel
+          </button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">
+            Add Transaction
+          </button>
         </div>
-      )}
+      </form>
+    </Modal>
+  )
+}
 
-      {/* Main Content */}
-      <section className="dashboard-hero">
-        <p className="eyebrow">Financial Overview</p>
-        <h1>Control your money with clarity.</h1>
-        <div className="hero-actions">
-          <button 
-            onClick={() => setShowModal(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '0 26px',
-              minHeight: '52px',
-              background: '#9fe870',
-              border: 'none',
-              borderRadius: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            <Plus size={18} />
-            <span>Add Transaction</span>
-          </button>
-          <button 
-            onClick={() => alert('Navigasi ke Analytics')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '0 26px',
-              minHeight: '52px',
-              background: 'white',
-              border: '1px solid #ddd',
-              borderRadius: '14px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            <BarChart3 size={18} />
-            <span>Analytics</span>
-          </button>
+// ─── Dashboard Page ──────────────────────────
+export default function DashboardPage({ transactions = [], onAddTransaction, onNavigate }) {
+  const [showModal, setShowModal] = useState(false)
+
+  // Compute live stats
+  const totalBalance    = transactions.reduce((s, t) => s + t.amount, 0)
+  const monthlyIncome   = transactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
+  const monthlyExpense  = Math.abs(transactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
+  const latest          = transactions.slice(0, 5)
+
+  const stats = [
+    { 
+      title: 'Total Balance',   
+      value: `Rp${totalBalance.toLocaleString('id-ID')}`,   
+      change: '+12.5%', 
+      icon: WalletCards,   
+      tone: 'green',
+      navigateTo: 'Transactions'  // Total Balance ke Transactions
+    },
+    { 
+      title: 'Monthly Income',  
+      value: `Rp${monthlyIncome.toLocaleString('id-ID')}`,  
+      change: '+8.1%',  
+      icon: TrendingUp,    
+      tone: 'green',
+      navigateTo: 'Analytics'     // Monthly Income ke Analytics
+    },
+    { 
+      title: 'Monthly Expense', 
+      value: `Rp${monthlyExpense.toLocaleString('id-ID')}`, 
+      change: '-2.4%',  
+      icon: ArrowDownRight, 
+      tone: 'red',
+      navigateTo: 'Analytics'     // Monthly Expense ke Analytics
+    },
+  ]
+
+  return (
+    <>
+      {/* ── Hero Section ── */}
+      <section className="bg-surface rounded-2xl p-8">
+        <p className="text-xs font-black uppercase tracking-widest text-primary mb-3">Financial Overview</p>
+        <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-3">
+          Control your money<br />with clarity.
+        </h1>
+        <p className="text-base text-body mb-6 max-w-lg">
+          Track your balance, monitor expenses, and grow your financial health with a cleaner, smarter workflow.
+        </p>
+        <div className="flex gap-3 flex-wrap">
+          <ActionButton icon={Plus} onClick={() => setShowModal(true)}>Add Transaction</ActionButton>
+          <ActionButton icon={BarChart3} variant="outline" onClick={() => onNavigate?.('Analytics')}>Analytics</ActionButton>
         </div>
       </section>
 
-      <div className="dashboard-feature-grid">
-        <div className="card balance-feature">
-          <p className="card-kicker">Available Balance</p>
-          <h2>Rp{totalBalance.toLocaleString('id-ID')}</h2>
-          <Badge>+18.2% this month</Badge>
-        </div>
-        <div className="card savings-feature">
-          <p className="card-kicker">Savings Goal</p>
-          <h2>72%</h2>
-          <div className="progress-track">
-            <span style={{ width: '72%' }} />
+      {/* ── Feature Grid: Balance + Savings ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Balance card */}
+        <Card tone="green">
+          <p className="text-xs font-black uppercase tracking-widest text-positive mb-2">Available Balance</p>
+          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">Rp{totalBalance.toLocaleString('id-ID')}</h2>
+          <Badge tone="green">+18.2% this month</Badge>
+        </Card>
+
+        {/* Savings goal card */}
+        <Card tone="sage">
+          <p className="text-xs font-black uppercase tracking-widest text-mute mb-2">Savings Goal</p>
+          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">72%</h2>
+          <div className="h-2 rounded-full bg-ink/10 overflow-hidden mb-3">
+            <div className="h-full rounded-full bg-positive transition-all" style={{ width: '72%' }} />
           </div>
-          <p>You are on track to reach your emergency fund target.</p>
-        </div>
+          <p className="text-sm text-body">You are on track to reach your emergency fund target.</p>
+        </Card>
       </div>
 
-      <div className="dashboard-stat-grid">
-        <div className="card dashboard-stat">
-          <div className="stat-row">
-            <IconTile icon={WalletCards} tone="green" />
-            <div>
-              <p>Total Balance</p>
-              <strong>Rp{totalBalance.toLocaleString('id-ID')}</strong>
+      {/* ── Stats Grid dengan Panah navigasi ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {stats.map(item => (
+          <Card key={item.title}>
+            <div className="flex items-center gap-3 mb-3">
+              <IconTile icon={item.icon} tone={item.tone === 'red' ? 'red' : 'green'} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-mute font-semibold">{item.title}</p>
+                <p className="text-lg font-black tracking-tight text-ink truncate">{item.value}</p>
+              </div>
+              {/* Panah kanan dengan navigasi */}
+              <RoundIconButton onClick={() => onNavigate?.(item.navigateTo)} />
             </div>
-            <button className="round-icon-button" style={{ flexShrink: 0 }}><ArrowRight size={18} /></button>
-          </div>
-          <Badge tone="green">+12.5%</Badge>
-        </div>
-        <div className="card dashboard-stat">
-          <div className="stat-row">
-            <IconTile icon={TrendingUp} tone="green" />
-            <div>
-              <p>Monthly Income</p>
-              <strong>Rp{monthlyIncome.toLocaleString('id-ID')}</strong>
-            </div>
-            <button className="round-icon-button" style={{ flexShrink: 0 }}><ArrowRight size={18} /></button>
-          </div>
-          <Badge tone="green">+8.1%</Badge>
-        </div>
-        <div className="card dashboard-stat">
-          <div className="stat-row">
-            <IconTile icon={ArrowDownRight} tone="red" />
-            <div>
-              <p>Monthly Expense</p>
-              <strong>Rp{monthlyExpense.toLocaleString('id-ID')}</strong>
-            </div>
-            <button className="round-icon-button" style={{ flexShrink: 0 }}><ArrowRight size={18} /></button>
-          </div>
-          <Badge tone="red">-2.4%</Badge>
-        </div>
+            <Badge tone={item.tone === 'red' ? 'red' : 'green'}>{item.change}</Badge>
+          </Card>
+        ))}
       </div>
 
-      <div className="card table-card">
-        <div className="table-heading">
-          <h2>Latest Transactions</h2>
-          <p>Your recent financial activity.</p>
+      {/* ── Transaction Table ── */}
+      <Card>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-black tracking-tight text-ink">Latest Transactions</h2>
+            <p className="text-sm text-mute">Your recent financial activity.</p>
+          </div>
+          <button
+            onClick={() => onNavigate?.('Transactions')}
+            className="text-sm font-semibold text-positive hover:underline flex items-center gap-1"
+          >
+            View all <ArrowRight size={14} />
+          </button>
         </div>
-        <div className="table-wrap">
-          <table style={{ width: '100%' }}>
+
+        <div className="overflow-x-auto -mx-2 px-2">
+          <table className="w-full min-w-120">
             <thead>
-              <tr><th>Transaction</th><th>Category</th><th>Date</th><th>Amount</th></tr>
+              <tr className="border-b border-ink/5">
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Transaction</th>
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Category</th>
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Date</th>
+                <th className="text-right text-xs font-black uppercase tracking-wider text-mute pb-3">Amount</th>
+              </tr>
             </thead>
-            <tbody>
-              {transactions.map(t => (
-                <tr key={t.id}>
-                  <td><strong>{t.name}</strong><br /><span style={{ fontSize: '12px', color: '#666' }}>{t.detail}</span></td>
-                  <td><Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge></td>
-                  <td>{t.formattedDate}</td>
-                  <td className={t.positive ? 'positive-text' : ''}>{t.formattedAmount}</td>
+            <tbody className="divide-y divide-ink/5">
+              {latest.map(t => (
+                <tr key={t.id} className="hover:bg-surface-soft/60 transition-colors cursor-pointer" onClick={() => onNavigate?.('Transactions')}>
+                  <td className="py-3.5 pr-4">
+                    <div className="flex items-center gap-3">
+                      <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'gray'} size={16} />
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{t.name}</p>
+                        <p className="text-xs text-mute">{t.detail}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3.5 pr-4">
+                    <Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge>
+                  </td>
+                  <td className="py-3.5 pr-4 text-sm text-body">{t.formattedDate}</td>
+                  <td className={`py-3.5 text-right text-sm font-semibold ${t.positive ? 'text-positive' : 'text-ink'}`}>
+                    {t.formattedAmount}
+                  </td>
                 </tr>
               ))}
+              {latest.length === 0 && (
+                <tr><td colSpan={4} className="text-center py-12 text-mute text-sm">No transactions yet</td></tr>
+              )}
             </tbody>
           </table>
         </div>
-      </div>
+      </Card>
+
+      {/* ── Modal ── */}
+      <AddTransactionModal isOpen={showModal} onClose={() => setShowModal(false)} onAdd={onAddTransaction} />
     </>
   )
 }

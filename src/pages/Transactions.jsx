@@ -1,488 +1,353 @@
 // src/pages/Transactions.jsx
-import { useState } from 'react'
-import { 
-  ArrowDownRight, 
-  ArrowUpRight, 
-  BarChart3, 
-  ChevronRight, 
-  Funnel, 
-  Plus, 
-  Search, 
-  TrendingDown, 
-  TrendingUp, 
-  X,
-  Calendar,
-  Download
-} from 'lucide-react'
-import { ActionButton, Badge, Card, IconTile, MetricCard } from '../components/common'
+// Full Tailwind refactor — preserves all logic (add, delete, filter, search, export)
 
-// Component untuk modal tambah transaksi (sama kayak di Dashboard)
+import { useState } from 'react'
+import {
+  ArrowDownRight, ArrowUpRight, BarChart3,
+  ChevronRight, Filter, Plus, Search, TrendingDown, TrendingUp, X, Download
+} from 'lucide-react'
+import {
+  ActionButton, Badge, Card, IconTile, MetricCard,
+  Modal, FormGroup, Input, Select
+} from '../components/common'
+
+// ─── Helpers ──────────────────────────────────
+function filterTransactions(list, { dateRange, type, category }) {
+  return list.filter(t => {
+    const now = new Date()
+    if (dateRange === 'today') { if (t.date !== now.toISOString().split('T')[0]) return false }
+    else if (dateRange === 'week') { const d = new Date(t.date); const diff = (now - d) / 86400000; if (diff > 7) return false }
+    else if (dateRange === 'month') { const d = new Date(t.date); if (d.getMonth() !== now.getMonth()) return false }
+    else if (dateRange === 'year') { const d = new Date(t.date); if (d.getFullYear() !== now.getFullYear()) return false }
+    if (type === 'income' && !t.positive) return false
+    if (type === 'expense' && t.positive) return false
+    if (category !== 'all' && t.category !== category) return false
+    return true
+  })
+}
+
+function searchTransactions(list, term) {
+  if (!term) return list
+  const q = term.toLowerCase()
+  return list.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || t.detail.toLowerCase().includes(q))
+}
+
+// ─── Add Transaction Modal ────────────────────
 function AddTransactionModal({ isOpen, onClose, onAdd }) {
-  const [formName, setFormName] = useState('')
-  const [formAmount, setFormAmount] = useState('')
-  const [formType, setFormType] = useState('expense')
+  const [formName, setFormName]         = useState('')
+  const [formAmount, setFormAmount]     = useState('')
+  const [formType, setFormType]         = useState('expense')
   const [formCategory, setFormCategory] = useState('')
-  const [formDetail, setFormDetail] = useState('')
+  const [formDetail, setFormDetail]     = useState('')
 
   const categories = {
-    expense: ['Food & Drink', 'Shopping', 'Entertainment', 'Bills', 'Transport', 'Healthcare', 'Other'],
-    income: ['Salary', 'Freelance', 'Investment', 'Gift', 'Other']
+    expense: ['Food & Drink','Shopping','Entertainment','Bills','Transport','Healthcare','Other'],
+    income:  ['Salary','Freelance','Investment','Gift','Other'],
   }
-
-  if (!isOpen) return null
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    
-    if (!formName || !formAmount) {
-      alert('Please fill in name and amount')
-      return
-    }
-    
+    if (!formName || !formAmount) return alert('Please fill in name and amount')
     const amountNum = parseFloat(formAmount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      alert('Please enter a valid amount')
-      return
-    }
-    
+    if (isNaN(amountNum) || amountNum <= 0) return alert('Please enter a valid amount')
     const finalAmount = formType === 'expense' ? -Math.abs(amountNum) : Math.abs(amountNum)
-    
-    const newTransaction = {
-      id: Date.now(),
-      name: formName,
-      detail: formDetail || '',
+    onAdd({
+      id: Date.now(), name: formName, detail: formDetail || '',
       category: formCategory || (formType === 'income' ? 'Salary' : 'Other'),
       date: new Date().toISOString().split('T')[0],
       formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       amount: finalAmount,
       formattedAmount: `${finalAmount > 0 ? '+' : '-'}Rp${Math.abs(finalAmount).toLocaleString('id-ID')}`,
-      positive: finalAmount > 0
-    }
-    
-    onAdd(newTransaction)
+      positive: finalAmount > 0,
+    })
     onClose()
-    setFormName('')
-    setFormAmount('')
-    setFormType('expense')
-    setFormCategory('')
-    setFormDetail('')
+    setFormName(''); setFormAmount(''); setFormType('expense'); setFormCategory(''); setFormDetail('')
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Add Transaction</h2>
-          <button onClick={onClose} className="modal-close"><X size={24} /></button>
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Transaction">
+      <form onSubmit={handleSubmit}>
+        <FormGroup label="Transaction Type">
+          <div className="flex gap-3">
+            <button type="button" onClick={() => setFormType('expense')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'expense' ? 'bg-danger text-white' : 'bg-red-50 text-danger'}`}>
+              Expense
+            </button>
+            <button type="button" onClick={() => setFormType('income')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'income' ? 'bg-positive text-white' : 'bg-primary-pale text-positive'}`}>
+              Income
+            </button>
+          </div>
+        </FormGroup>
+        <FormGroup label="Category">
+          <Select value={formCategory} onChange={e => setFormCategory(e.target.value)}>
+            <option value="">Select category</option>
+            {categories[formType].map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </FormGroup>
+        <FormGroup label="Transaction Name *">
+          <Input required value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g., Groceries, Salary" />
+        </FormGroup>
+        <FormGroup label="Amount (IDR) *">
+          <Input type="number" required value={formAmount} onChange={e => setFormAmount(e.target.value)} placeholder="0" />
+        </FormGroup>
+        <FormGroup label="Description (Optional)">
+          <Input value={formDetail} onChange={e => setFormDetail(e.target.value)} placeholder="Additional notes..." />
+        </FormGroup>
+        <div className="flex gap-3 mt-6">
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">Add Transaction</button>
         </div>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Transaction Type</label>
-            <div className="type-toggle">
-              <button type="button" className={`expense ${formType === 'expense' ? 'active' : ''}`} onClick={() => setFormType('expense')}>Expense</button>
-              <button type="button" className={`income ${formType === 'income' ? 'active' : ''}`} onClick={() => setFormType('income')}>Income</button>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label>Category</label>
-            <select value={formCategory} onChange={e => setFormCategory(e.target.value)}>
-              <option value="">Select category</option>
-              {categories[formType].map(cat => <option key={cat} value={cat}>{cat}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Transaction Name *</label>
-            <input type="text" required value={formName} onChange={e => setFormName(e.target.value)} placeholder="e.g., Groceries, Salary" />
-          </div>
-
-          <div className="form-group">
-            <label>Amount (IDR) *</label>
-            <input type="number" required value={formAmount} onChange={e => setFormAmount(e.target.value)} placeholder="0" />
-          </div>
-
-          <div className="form-group">
-            <label>Description (Optional)</label>
-            <input type="text" value={formDetail} onChange={e => setFormDetail(e.target.value)} placeholder="Additional notes..." />
-          </div>
-
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn-primary">Add Transaction</button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   )
 }
 
-// Component untuk filter modal
+// ─── Filter Modal ─────────────────────────────
 function FilterModal({ isOpen, onClose, filters, onApply }) {
-  const [localFilters, setLocalFilters] = useState(filters)
-
+  const [local, setLocal] = useState(filters)
   if (!isOpen) return null
-
-  const handleApply = () => {
-    onApply(localFilters)
-    onClose()
-  }
-
+  const reset = { dateRange: 'all', type: 'all', category: 'all' }
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Filter Transactions</h2>
-          <button onClick={onClose} className="modal-close"><X size={24} /></button>
-        </div>
-        
-        <div className="form-group">
-          <label>Date Range</label>
-          <select value={localFilters.dateRange} onChange={e => setLocalFilters({...localFilters, dateRange: e.target.value})}>
-            <option value="all">All Time</option>
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="year">This Year</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Transaction Type</label>
-          <select value={localFilters.type} onChange={e => setLocalFilters({...localFilters, type: e.target.value})}>
-            <option value="all">All</option>
-            <option value="income">Income Only</option>
-            <option value="expense">Expense Only</option>
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label>Category</label>
-          <select value={localFilters.category} onChange={e => setLocalFilters({...localFilters, category: e.target.value})}>
-            <option value="all">All Categories</option>
-            <option value="Food & Drink">Food & Drink</option>
-            <option value="Shopping">Shopping</option>
-            <option value="Entertainment">Entertainment</option>
-            <option value="Bills">Bills</option>
-            <option value="Transport">Transport</option>
-            <option value="Income">Income</option>
-          </select>
-        </div>
-
-        <div className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={() => { setLocalFilters({ dateRange: 'all', type: 'all', category: 'all' }); onApply({ dateRange: 'all', type: 'all', category: 'all' }); onClose(); }}>Reset</button>
-          <button type="button" className="btn-primary" onClick={handleApply}>Apply Filters</button>
-        </div>
+    <Modal isOpen={isOpen} onClose={onClose} title="Filter Transactions">
+      <FormGroup label="Date Range">
+        <Select value={local.dateRange} onChange={e => setLocal({ ...local, dateRange: e.target.value })}>
+          <option value="all">All Time</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="year">This Year</option>
+        </Select>
+      </FormGroup>
+      <FormGroup label="Transaction Type">
+        <Select value={local.type} onChange={e => setLocal({ ...local, type: e.target.value })}>
+          <option value="all">All</option>
+          <option value="income">Income Only</option>
+          <option value="expense">Expense Only</option>
+        </Select>
+      </FormGroup>
+      <FormGroup label="Category">
+        <Select value={local.category} onChange={e => setLocal({ ...local, category: e.target.value })}>
+          <option value="all">All Categories</option>
+          {['Food & Drink','Shopping','Entertainment','Bills','Transport','Income'].map(c => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </Select>
+      </FormGroup>
+      <div className="flex gap-3 mt-6">
+        <button type="button" onClick={() => { setLocal(reset); onApply(reset); onClose() }}
+          className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">
+          Reset
+        </button>
+        <button type="button" onClick={() => { onApply(local); onClose() }}
+          className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">
+          Apply Filters
+        </button>
       </div>
-    </div>
+    </Modal>
   )
 }
 
-// Component untuk transaction detail modal
-function TransactionDetailModal({ isOpen, onClose, transaction, onDelete }) {
-  if (!isOpen || !transaction) return null
-
+// ─── Transaction Detail Modal ─────────────────
+function TransactionDetailModal({ isOpen, onClose, transaction: t, onDelete }) {
+  if (!isOpen || !t) return null
   const handleDelete = () => {
-    if (confirm(`Delete ${transaction.name}?`)) {
-      onDelete(transaction.id)
-      onClose()
-    }
+    if (confirm(`Delete "${t.name}"?`)) { onDelete(t.id); onClose() }
   }
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Transaction Details</h2>
-          <button onClick={onClose} className="modal-close"><X size={24} /></button>
-        </div>
-        
-        <div className="transaction-detail-header">
-          <IconTile icon={transaction.positive ? ArrowUpRight : ArrowDownRight} tone={transaction.positive ? 'green' : 'red'} size={32} />
-          <div>
-            <h3>{transaction.name}</h3>
-            <p>{transaction.detail || 'No description'}</p>
-          </div>
-        </div>
-        
-        <div className="transaction-detail-info">
-          <div className="info-row"><span>Amount:</span><strong className={transaction.positive ? 'positive-text' : ''}>{transaction.formattedAmount}</strong></div>
-          <div className="info-row"><span>Category:</span><Badge tone={transaction.positive ? 'green' : 'gray'}>{transaction.category}</Badge></div>
-          <div className="info-row"><span>Date:</span><span>{transaction.formattedDate}</span></div>
-        </div>
-        
-        <div className="modal-actions">
-          <button onClick={handleDelete} className="btn-danger">Delete Transaction</button>
-          <button onClick={onClose} className="btn-secondary">Close</button>
+    <Modal isOpen={isOpen} onClose={onClose} title="Transaction Details">
+      <div className="flex items-center gap-4 mb-6 pb-6 border-b border-ink/5">
+        <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'red'} size={28} />
+        <div>
+          <h3 className="text-lg font-black text-ink">{t.name}</h3>
+          <p className="text-sm text-mute">{t.detail}</p>
         </div>
       </div>
-    </div>
+      <div className="space-y-3 mb-6">
+        {[
+          ['Amount', <span className={`font-semibold ${t.positive ? 'text-positive' : 'text-danger'}`}>{t.formattedAmount}</span>],
+          ['Category', <Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge>],
+          ['Date', t.formattedDate],
+        ].map(([label, val]) => (
+          <div key={label} className="flex items-center justify-between">
+            <span className="text-sm text-mute">{label}</span>
+            <span className="text-sm text-ink">{val}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-3">
+        <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Close</button>
+        <button onClick={handleDelete} className="flex-1 py-3 rounded-xl bg-red-50 text-danger text-sm font-semibold hover:bg-red-100 transition-colors">Delete</button>
+      </div>
+    </Modal>
   )
 }
 
-// Filter function
-const filterTransactions = (transactions, filters) => {
-  return transactions.filter(t => {
-    // Filter by type
-    if (filters.type === 'income' && !t.positive) return false
-    if (filters.type === 'expense' && t.positive) return false
-    
-    // Filter by category
-    if (filters.category !== 'all' && t.category !== filters.category) return false
-    
-    // Filter by date range
-    if (filters.dateRange !== 'all') {
-      const today = new Date()
-      const tDate = new Date(t.date)
-      const diffDays = Math.floor((today - tDate) / (1000 * 60 * 60 * 24))
-      
-      if (filters.dateRange === 'today' && diffDays > 0) return false
-      if (filters.dateRange === 'week' && diffDays > 7) return false
-      if (filters.dateRange === 'month' && diffDays > 30) return false
-      if (filters.dateRange === 'year' && diffDays > 365) return false
-    }
-    
-    return true
-  })
-}
+// ─── Main Transactions Page ───────────────────
+const INITIAL = [
+  { id: 1, name: 'Freelance Payment', detail: 'Payment received', category: 'Income', date: '2024-05-20', formattedDate: 'May 20, 2024', amount: 2500000, formattedAmount: '+Rp2.500.000', positive: true },
+  { id: 2, name: 'Spotify Premium', detail: 'Monthly subscription', category: 'Entertainment', date: '2024-05-20', formattedDate: 'May 20, 2024', amount: -59000, formattedAmount: '-Rp59.000', positive: false },
+  { id: 3, name: 'Coffee Shop', detail: 'Food & Drink', category: 'Food & Drink', date: '2024-05-19', formattedDate: 'May 19, 2024', amount: -45000, formattedAmount: '-Rp45.000', positive: false },
+  { id: 4, name: 'Groceries', detail: 'Supermarket', category: 'Shopping', date: '2024-05-18', formattedDate: 'May 18, 2024', amount: -230000, formattedAmount: '-Rp230.000', positive: false },
+  { id: 5, name: 'SeaBank Interest', detail: 'Interest received', category: 'Income', date: '2024-05-18', formattedDate: 'May 18, 2024', amount: 12450, formattedAmount: '+Rp12.450', positive: true },
+  { id: 6, name: 'Electricity Bill', detail: 'PLN', category: 'Bills', date: '2024-05-15', formattedDate: 'May 15, 2024', amount: -450000, formattedAmount: '-Rp450.000', positive: false },
+  { id: 7, name: 'Internet Bill', detail: 'Indihome', category: 'Bills', date: '2024-05-12', formattedDate: 'May 12, 2024', amount: -280000, formattedAmount: '-Rp280.000', positive: false },
+  { id: 8, name: 'Netflix', detail: 'Subscription', category: 'Entertainment', date: '2024-05-10', formattedDate: 'May 10, 2024', amount: -149000, formattedAmount: '-Rp149.000', positive: false },
+]
 
-// Search function
-const searchTransactions = (transactions, searchTerm) => {
-  if (!searchTerm) return transactions
-  const term = searchTerm.toLowerCase()
-  return transactions.filter(t => 
-    t.name.toLowerCase().includes(term) || 
-    t.category.toLowerCase().includes(term) ||
-    (t.detail && t.detail.toLowerCase().includes(term))
-  )
-}
+export default function TransactionsPage({ transactions: sharedTx, onAddTransaction, onDeleteTransaction }) {
+  const [localTransactions, setLocalTransactions] = useState(sharedTx?.length ? sharedTx : INITIAL)
+  const [searchTerm, setSearchTerm]               = useState('')
+  const [isAddOpen, setIsAddOpen]                 = useState(false)
+  const [isFilterOpen, setIsFilterOpen]           = useState(false)
+  const [selectedTx, setSelectedTx]               = useState(null)
+  const [filters, setFilters]                     = useState({ dateRange: 'all', type: 'all', category: 'all' })
 
-export default function TransactionsPage({ transactions: externalTransactions, onAddTransaction, onDeleteTransaction }) {
-  const [localTransactions, setLocalTransactions] = useState(externalTransactions || [
-    {
-      id: 1,
-      name: 'Freelance Payment',
-      detail: 'Payment received',
-      category: 'Income',
-      date: '2024-05-20',
-      formattedDate: 'May 20, 2024',
-      amount: 2500000,
-      formattedAmount: '+Rp2.500.000',
-      positive: true,
-    },
-    {
-      id: 2,
-      name: 'Spotify Premium',
-      detail: 'Monthly subscription',
-      category: 'Entertainment',
-      date: '2024-05-20',
-      formattedDate: 'May 20, 2024',
-      amount: -59000,
-      formattedAmount: '-Rp59.000',
-      positive: false,
-    },
-    {
-      id: 3,
-      name: 'Coffee Shop',
-      detail: 'Food & Drink',
-      category: 'Food & Drink',
-      date: '2024-05-19',
-      formattedDate: 'May 19, 2024',
-      amount: -45000,
-      formattedAmount: '-Rp45.000',
-      positive: false,
-    },
-    {
-      id: 4,
-      name: 'Groceries',
-      detail: 'Supermarket',
-      category: 'Shopping',
-      date: '2024-05-18',
-      formattedDate: 'May 18, 2024',
-      amount: -230000,
-      formattedAmount: '-Rp230.000',
-      positive: false,
-    },
-    {
-      id: 5,
-      name: 'SeaBank Interest',
-      detail: 'Interest received',
-      category: 'Income',
-      date: '2024-05-18',
-      formattedDate: 'May 18, 2024',
-      amount: 12450,
-      formattedAmount: '+Rp12.450',
-      positive: true,
-    },
-    {
-      id: 6,
-      name: 'Electricity Bill',
-      detail: 'PLN',
-      category: 'Bills',
-      date: '2024-05-15',
-      formattedDate: 'May 15, 2024',
-      amount: -450000,
-      formattedAmount: '-Rp450.000',
-      positive: false,
-    },
-    {
-      id: 7,
-      name: 'Internet Bill',
-      detail: 'Indihome',
-      category: 'Bills',
-      date: '2024-05-12',
-      formattedDate: 'May 12, 2024',
-      amount: -280000,
-      formattedAmount: '-Rp280.000',
-      positive: false,
-    },
-    {
-      id: 8,
-      name: 'Netflix',
-      detail: 'Subscription',
-      category: 'Entertainment',
-      date: '2024-05-10',
-      formattedDate: 'May 10, 2024',
-      amount: -149000,
-      formattedAmount: '-Rp149.000',
-      positive: false,
-    },
-  ])
+  const filtered  = filterTransactions(localTransactions, filters)
+  const displayed = searchTransactions(filtered, searchTerm)
 
-  const [searchTerm, setSearchTerm] = useState('')
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
-  const [selectedTransaction, setSelectedTransaction] = useState(null)
-  const [filters, setFilters] = useState({ dateRange: 'all', type: 'all', category: 'all' })
+  const totalIncome  = localTransactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
+  const totalExpense = Math.abs(localTransactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
+  const savingsRate  = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
 
-  // Hitung statistik
-  const filteredByDate = filterTransactions(localTransactions, filters)
-  const searchedTransactions = searchTransactions(filteredByDate, searchTerm)
-  
-  const totalIncome = localTransactions.filter(t => t.positive).reduce((sum, t) => sum + t.amount, 0)
-  const totalExpense = Math.abs(localTransactions.filter(t => !t.positive).reduce((sum, t) => sum + t.amount, 0))
-  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
-
-  const handleAddTransaction = (newTransaction) => {
-    setLocalTransactions([newTransaction, ...localTransactions])
-    if (onAddTransaction) onAddTransaction(newTransaction)
+  const handleAdd = (t) => {
+    setLocalTransactions(prev => [t, ...prev])
+    onAddTransaction?.(t)
   }
-
-  const handleDeleteTransaction = (id) => {
-    setLocalTransactions(localTransactions.filter(t => t.id !== id))
-    if (onDeleteTransaction) onDeleteTransaction(id)
+  const handleDelete = (id) => {
+    setLocalTransactions(prev => prev.filter(t => t.id !== id))
+    onDeleteTransaction?.(id)
   }
-
   const handleExport = () => {
     const csv = [
-      ['Name', 'Category', 'Date', 'Amount'],
-      ...searchedTransactions.map(t => [t.name, t.category, t.formattedDate, t.formattedAmount])
-    ].map(row => row.join(',')).join('\n')
-    
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
+      ['Name','Category','Date','Amount'],
+      ...displayed.map(t => [t.name, t.category, t.formattedDate, t.formattedAmount])
+    ].map(r => r.join(',')).join('\n')
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `transactions_${new Date().toISOString().split('T')[0]}.csv` })
     a.click()
-    URL.revokeObjectURL(url)
+  }
+
+  // Active filter badges
+  const hasFilter = filters.dateRange !== 'all' || filters.type !== 'all' || filters.category !== 'all'
+  const filterLabels = {
+    today: 'Today', week: 'This Week', month: 'This Month', year: 'This Year',
+    income: 'Income Only', expense: 'Expense Only',
   }
 
   return (
     <>
-      <div className="page-header">
+      {/* ── Page Header ── */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <p className="eyebrow">Transaction History</p>
-          <h1>Manage your cash flow.</h1>
-          <p className="page-lede">Track every expense, income, and recurring payment in one clean workspace.</p>
+          <p className="text-xs font-black uppercase tracking-widest text-primary mb-2">Transaction History</p>
+          <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-2">Manage your cash flow.</h1>
+          <p className="text-base text-body max-w-lg">Track every expense, income, and recurring payment in one clean workspace.</p>
         </div>
-        <div className="page-action">
-          <ActionButton icon={Plus} onClick={() => setIsAddModalOpen(true)}>Add Transaction</ActionButton>
-        </div>
+        <ActionButton icon={Plus} onClick={() => setIsAddOpen(true)}>Add Transaction</ActionButton>
       </div>
 
-      {/* Stats Cards */}
-      <div className="three-grid">
+      {/* ── Metric Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <MetricCard icon={TrendingUp} title="Total Income" value={`Rp${totalIncome.toLocaleString('id-ID')}`} change="+8.1%" note="this month" />
         <MetricCard icon={TrendingDown} title="Total Expenses" value={`Rp${totalExpense.toLocaleString('id-ID')}`} change="-2.4%" note="this month" tone="red" />
-        <Card className="metric-card">
-          <div className="metric-main">
+        {/* Savings rate card */}
+        <Card>
+          <div className="flex items-start justify-between mb-3">
             <div>
-              <p className="muted-label">Savings Rate</p>
-              <h3>{savingsRate}%</h3>
+              <p className="text-xs font-bold uppercase tracking-wider text-mute mb-1">Savings Rate</p>
+              <p className="text-2xl font-black tracking-tight text-ink">{savingsRate}%</p>
             </div>
             <IconTile icon={BarChart3} />
           </div>
-          <div className="progress-track short">
-            <span style={{ width: `${savingsRate}%` }} />
+          <div className="h-1.5 rounded-full bg-ink/10 overflow-hidden mb-2">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${savingsRate}%` }} />
           </div>
-          <p className="soft-note">of income saved</p>
+          <p className="text-xs text-mute">of income saved</p>
         </Card>
       </div>
 
-      {/* Toolbar */}
-      <div className="toolbar-row">
-        <label className="search-field">
-          <Search size={22} />
-          <input type="text" placeholder="Search transactions..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-        </label>
-        <ActionButton icon={Funnel} variant="secondary" onClick={() => setIsFilterModalOpen(true)}>Filter</ActionButton>
-        <ActionButton icon={Download} variant="secondary" onClick={handleExport}>Export</ActionButton>
+      {/* ── Toolbar ── */}
+      <div className="flex gap-3 flex-wrap items-center">
+        {/* Search */}
+        <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-surface rounded-xl px-4 py-3 border border-ink/10">
+          <Search size={18} className="text-mute shrink-0" />
+          <input
+            type="text"
+            placeholder="Search transactions..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="flex-1 text-sm text-ink bg-transparent focus:outline-none placeholder:text-mute"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} className="text-mute hover:text-ink">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+        <ActionButton icon={Filter} variant="outline" onClick={() => setIsFilterOpen(true)}>Filter</ActionButton>
+        <ActionButton icon={Download} variant="outline" onClick={handleExport}>Export</ActionButton>
       </div>
 
-      {/* Active Filters */}
-      {(filters.dateRange !== 'all' || filters.type !== 'all' || filters.category !== 'all') && (
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          {filters.dateRange !== 'all' && <Badge tone="blue">{filters.dateRange === 'today' ? 'Today' : filters.dateRange === 'week' ? 'This Week' : filters.dateRange === 'month' ? 'This Month' : 'This Year'}</Badge>}
-          {filters.type !== 'all' && <Badge tone={filters.type === 'income' ? 'green' : 'red'}>{filters.type === 'income' ? 'Income Only' : 'Expense Only'}</Badge>}
+      {/* ── Active Filter Badges ── */}
+      {hasFilter && (
+        <div className="flex gap-2 flex-wrap">
+          {filters.dateRange !== 'all' && <Badge tone="blue">{filterLabels[filters.dateRange]}</Badge>}
+          {filters.type !== 'all' && <Badge tone={filters.type === 'income' ? 'green' : 'red'}>{filterLabels[filters.type]}</Badge>}
           {filters.category !== 'all' && <Badge tone="orange">{filters.category}</Badge>}
+          <button onClick={() => setFilters({ dateRange: 'all', type: 'all', category: 'all' })}
+            className="text-xs text-mute hover:text-ink underline">
+            Clear all
+          </button>
         </div>
       )}
 
-      {/* Transaction Table */}
-      <Card className="table-card">
-        <div className="table-heading">
+      {/* ── Transaction Table ── */}
+      <Card>
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h2>All Transactions</h2>
-            <p>{searchedTransactions.length} transactions found</p>
+            <h2 className="text-lg font-black tracking-tight text-ink">All Transactions</h2>
+            <p className="text-sm text-mute">{displayed.length} transactions found</p>
           </div>
         </div>
-        <div className="table-wrap">
-          <table>
+        <div className="overflow-x-auto -mx-2 px-2">
+          <table className="w-full min-w-[560px]">
             <thead>
-              <tr><th>Transaction</th><th>Category</th><th>Date</th><th>Amount</th><th /></tr>
+              <tr className="border-b border-ink/5">
+                {['Transaction','Category','Date','Amount',''].map((h, i) => (
+                  <th key={i} className={`text-xs font-black uppercase tracking-wider text-mute pb-3 ${i === 3 ? 'text-right' : 'text-left'}`}>{h}</th>
+                ))}
+              </tr>
             </thead>
-            <tbody>
-              {searchedTransactions.map((item) => (
-                <tr key={item.id} onClick={() => setSelectedTransaction(item)} style={{ cursor: 'pointer' }}>
-                  <td>
-                    <div className="entity-cell">
-                      <IconTile icon={item.positive ? ArrowUpRight : ArrowDownRight} tone={item.positive ? 'green' : 'gray'} size={19} />
+            <tbody className="divide-y divide-ink/5">
+              {displayed.map(t => (
+                <tr key={t.id} onClick={() => setSelectedTx(t)} className="hover:bg-surface-soft/50 cursor-pointer transition-colors">
+                  <td className="py-3.5 pr-4">
+                    <div className="flex items-center gap-3">
+                      <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'gray'} size={16} />
                       <div>
-                        <strong>{item.name}</strong>
-                        <span>{item.detail}</span>
+                        <p className="text-sm font-semibold text-ink">{t.name}</p>
+                        <p className="text-xs text-mute">{t.detail}</p>
                       </div>
                     </div>
                   </td>
-                  <td><Badge tone={item.positive ? 'green' : 'gray'}>{item.category}</Badge></td>
-                  <td>{item.formattedDate}</td>
-                  <td className={item.positive ? 'positive-text' : ''}>{item.formattedAmount}</td>
-                  <td><ChevronRight size={18} /></td>
+                  <td className="py-3.5 pr-4"><Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge></td>
+                  <td className="py-3.5 pr-4 text-sm text-body">{t.formattedDate}</td>
+                  <td className={`py-3.5 pr-2 text-right text-sm font-semibold ${t.positive ? 'text-positive' : 'text-ink'}`}>{t.formattedAmount}</td>
+                  <td className="py-3.5"><ChevronRight size={16} className="text-mute" /></td>
                 </tr>
               ))}
-              {searchedTransactions.length === 0 && (
-                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '60px' }}>No transactions found</td></tr>
+              {displayed.length === 0 && (
+                <tr><td colSpan={5} className="text-center py-16 text-mute text-sm">No transactions found</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* Modals */}
-      <AddTransactionModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onAdd={handleAddTransaction} />
-      <FilterModal isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} filters={filters} onApply={setFilters} />
-      <TransactionDetailModal isOpen={!!selectedTransaction} onClose={() => setSelectedTransaction(null)} transaction={selectedTransaction} onDelete={handleDeleteTransaction} />
+      {/* ── Modals ── */}
+      <AddTransactionModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAdd} />
+      <FilterModal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} filters={filters} onApply={setFilters} />
+      <TransactionDetailModal isOpen={!!selectedTx} onClose={() => setSelectedTx(null)} transaction={selectedTx} onDelete={handleDelete} />
     </>
   )
 }
