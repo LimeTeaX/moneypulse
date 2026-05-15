@@ -202,7 +202,7 @@ export default function Sidebar({ activePage, onNavigate }) {
             <>
               <div className="flex justify-between items-center mb-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-mute">Current Balance</p>
-                <ArrowUpRight size={14} className="text-[#9fe870]" />
+                <ArrowUpRight size={14} className="text-primary" />
               </div>
               <p className="text-2xl font-black tracking-tight text-ink leading-none">
                 {formatBalance(totalBalance)}
