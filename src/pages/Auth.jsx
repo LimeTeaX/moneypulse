@@ -84,10 +84,14 @@ export default function AuthPage() {
     setLoading(true)
 
     try {
+      const redirectUrl = import.meta.env.DEV
+        ? 'http://localhost:5173/auth/callback'  // development
+        : 'https://moneypulse-4bq7b66n4-limeteaxs-projects.vercel.app/auth/callback' // production
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
