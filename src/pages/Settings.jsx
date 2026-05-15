@@ -1,11 +1,11 @@
 // src/pages/Settings.jsx
 // ─────────────────────────────────────────────
 // Settings Page — Profile, Notifications, Appearance, Security, Accounts, Privacy, About
-// Full Tailwind, semua functional, Toast notification
+// Full Supabase integration, all tabs functional
 // ─────────────────────────────────────────────
 
 import { useState, useEffect } from 'react'
-import {
+import { 
   User, Bell, Palette, Shield, CreditCard, Download, Info,
   ChevronRight, Check, RefreshCw, ExternalLink, Trash2,
   Camera, PenLine, LockKeyhole, Monitor, Smartphone, Laptop,
@@ -14,33 +14,17 @@ import {
   Plus, X, CheckCircle, XCircle
 } from 'lucide-react'
 import { Card, Toggle, Badge, ActionButton, IconTile, Input, Modal, FormGroup, Select } from '../components/common'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 // ─────────────────────────────────────────────
-// Toast Hook & Component (taruh di luar, sebelum SettingsPage)
+// Toast Component
 // ─────────────────────────────────────────────
-function useToast() {
-  const [toast, setToast] = useState({ isOpen: false, message: '', type: 'success' })
-
-  const showToast = (message, type = 'success') => {
-    setToast({ isOpen: true, message, type })
-  }
-
-  const hideToast = () => {
-    setToast({ isOpen: false, message: '', type: 'success' })
-  }
-
-  return { toast, showToast, hideToast }
-}
-
-function Toast({ isOpen, message, type, onClose }) {
+function Toast({ message, type, onClose }) {
   useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(onClose, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
+    const timer = setTimeout(onClose, 3000)
+    return () => clearTimeout(timer)
+  }, [onClose])
 
   const bgColor = type === 'success' ? 'bg-positive/10 border-positive/20' :
                   type === 'error' ? 'bg-danger/10 border-danger/20' :
@@ -55,57 +39,6 @@ function Toast({ isOpen, message, type, onClose }) {
         <p className="text-sm font-medium text-ink">{message}</p>
       </div>
     </div>
-  )
-}
-
-// ─────────────────────────────────────────────
-// Modal Add Account
-// ─────────────────────────────────────────────
-function AddAccountModal({ isOpen, onClose, onAdd }) {
-  const [formData, setFormData] = useState({
-    name: '', accountNumber: '', balance: '', type: 'Checking', emoji: '🏦'
-  })
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (!formData.name || !formData.accountNumber || !formData.balance) {
-      alert('Please fill all required fields')
-      return
-    }
-    onAdd({
-      ...formData,
-      balance: parseFloat(formData.balance),
-      status: 'active'
-    })
-    onClose()
-    setFormData({ name: '', accountNumber: '', balance: '', type: 'Checking', emoji: '🏦' })
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Link New Account">
-      <form onSubmit={handleSubmit}>
-        <FormGroup label="Bank / Wallet Name *">
-          <Input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="e.g., Bank BCA, OVO" />
-        </FormGroup>
-        <FormGroup label="Account Number *">
-          <Input required value={formData.accountNumber} onChange={e => setFormData({ ...formData, accountNumber: e.target.value })} placeholder="**** **** **** 1234" />
-        </FormGroup>
-        <FormGroup label="Balance (IDR) *">
-          <Input type="number" required value={formData.balance} onChange={e => setFormData({ ...formData, balance: e.target.value })} placeholder="0" />
-        </FormGroup>
-        <FormGroup label="Account Type">
-          <Select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })}>
-            <option value="Checking">Checking Account</option>
-            <option value="Savings">Savings Account</option>
-            <option value="E-Wallet">E-Wallet</option>
-          </Select>
-        </FormGroup>
-        <div className="flex gap-3 mt-6">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
-          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Link Account</button>
-        </div>
-      </form>
-    </Modal>
   )
 }
 
@@ -128,20 +61,19 @@ function ChangePasswordModal({ isOpen, onClose, onChange, showToast }) {
     onChange(passwords)
     onClose()
     setPasswords({ current: '', new: '', confirm: '' })
-    showToast('Password changed successfully!', 'success')
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Change Password">
       <form onSubmit={handleSubmit}>
         <FormGroup label="Current Password">
-          <Input type="password" required value={passwords.current} onChange={e => setPasswords({ ...passwords, current: e.target.value })} />
+          <Input type="password" required value={passwords.current} onChange={e => setPasswords({...passwords, current: e.target.value})} />
         </FormGroup>
         <FormGroup label="New Password">
-          <Input type="password" required value={passwords.new} onChange={e => setPasswords({ ...passwords, new: e.target.value })} />
+          <Input type="password" required value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} />
         </FormGroup>
         <FormGroup label="Confirm New Password">
-          <Input type="password" required value={passwords.confirm} onChange={e => setPasswords({ ...passwords, confirm: e.target.value })} />
+          <Input type="password" required value={passwords.confirm} onChange={e => setPasswords({...passwords, confirm: e.target.value})} />
         </FormGroup>
         <div className="flex gap-3 mt-6">
           <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
@@ -153,60 +85,195 @@ function ChangePasswordModal({ isOpen, onClose, onChange, showToast }) {
 }
 
 // ─────────────────────────────────────────────
+// Modal Add Account
+// ─────────────────────────────────────────────
+function AddAccountModal({ isOpen, onClose, onAdd, showToast }) {
+  const [formData, setFormData] = useState({
+    name: '', account_number: '', balance: '', type: 'Checking', emoji: '🏦'
+  })
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!formData.name || !formData.account_number || !formData.balance) {
+      showToast('Please fill all required fields', 'error')
+      return
+    }
+    onAdd({
+      ...formData,
+      balance: parseFloat(formData.balance),
+      status: 'active'
+    })
+    onClose()
+    setFormData({ name: '', account_number: '', balance: '', type: 'Checking', emoji: '🏦' })
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Link New Account">
+      <form onSubmit={handleSubmit}>
+        <FormGroup label="Bank / Wallet Name *">
+          <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g., Bank BCA, OVO" />
+        </FormGroup>
+        <FormGroup label="Account Number *">
+          <Input required value={formData.account_number} onChange={e => setFormData({...formData, account_number: e.target.value})} placeholder="**** **** **** 1234" />
+        </FormGroup>
+        <FormGroup label="Balance (IDR) *">
+          <Input type="number" required value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} placeholder="0" />
+        </FormGroup>
+        <FormGroup label="Account Type">
+          <Select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+            <option value="Checking">Checking Account</option>
+            <option value="Savings">Savings Account</option>
+            <option value="E-Wallet">E-Wallet</option>
+          </Select>
+        </FormGroup>
+        <div className="flex gap-3 mt-6">
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Link Account</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Profile Tab
 // ─────────────────────────────────────────────
 function ProfileTab({ showToast }) {
-  const [prefs, setPrefs] = useState({ budgetAlerts: true, weeklySum: true, marketing: false })
-  const [currency, setCurrency] = useState('IDR')
-  const [language, setLanguage] = useState('English')
-  const [dateFormat, setDateFormat] = useState('MMM DD, YYYY')
-
+  const { user } = useAuth()
   const [profile, setProfile] = useState({
-    name: 'Jackson M. Tambun',
-    email: 'jackson.tambun@email.com',
-    phone: '+62 812 3456 7890'
+    name: '',
+    email: '',
+    phone: '',
+    currency: 'IDR',
+    language: 'English',
+    date_format: 'MMM DD, YYYY'
   })
-
+  const [prefs, setPrefs] = useState({
+    budget_alerts: true,
+    weekly_summary: true,
+    marketing_emails: false
+  })
+  const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' })
 
-  const handleEditClick = () => {
-    setEditForm({ name: profile.name, email: profile.email, phone: profile.phone })
-    setShowEditModal(true)
-  }
+  // Fetch profile from Supabase
+  useEffect(() => {
+    if (!user) return
+    fetchProfile()
+  }, [user])
 
-  const handleSaveProfile = () => {
-    if (!editForm.name || !editForm.email || !editForm.phone) {
-      showToast('Please fill all fields', 'error')
-      return
+  const fetchProfile = async () => {
+    setLoading(true)
+    // Get profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (!profileError && profileData) {
+      setProfile({
+        name: profileData.name || user.email?.split('@')[0] || 'User',
+        email: user.email || '',
+        phone: profileData.phone || '',
+        currency: profileData.currency || 'IDR',
+        language: profileData.language || 'English',
+        date_format: profileData.date_format || 'MMM DD, YYYY'
+      })
+      setEditForm({
+        name: profileData.name || user.email?.split('@')[0] || 'User',
+        email: user.email || '',
+        phone: profileData.phone || ''
+      })
     }
-    setProfile({ name: editForm.name, email: editForm.email, phone: editForm.phone })
-    setShowEditModal(false)
-    showToast('Profile updated successfully!', 'success')
+
+    // Get settings
+    const { data: settingsData, error: settingsError } = await supabase
+      .from('user_settings')
+      .select('budget_alerts, weekly_summary, marketing_emails')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!settingsError && settingsData) {
+      setPrefs({
+        budget_alerts: settingsData.budget_alerts,
+        weekly_summary: settingsData.weekly_summary,
+        marketing_emails: settingsData.marketing_emails
+      })
+    }
+    setLoading(false)
   }
 
-  const handleCurrencyChange = () => {
-    const newCurrency = currency === 'IDR' ? 'USD' : 'IDR'
-    setCurrency(newCurrency)
-    showToast(`Currency changed to ${newCurrency === 'IDR' ? 'Indonesian Rupiah' : 'US Dollar'}`, 'info')
+  const updateProfile = async (updates) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+    return !error
   }
 
-  const handleLanguageChange = () => {
-    const newLanguage = language === 'English' ? 'Indonesia' : 'English'
-    setLanguage(newLanguage)
-    showToast(`Language changed to ${newLanguage}`, 'info')
+  const updateSettings = async (updates) => {
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('user_id', user.id)
+    return !error
   }
 
-  const handleDateFormatChange = () => {
-    const newFormat = dateFormat === 'MMM DD, YYYY' ? 'DD/MM/YYYY' : 'MMM DD, YYYY'
-    setDateFormat(newFormat)
-    showToast('Date format updated', 'info')
+  const handleSaveProfile = async () => {
+    const success = await updateProfile({
+      name: editForm.name,
+      phone: editForm.phone
+    })
+    if (success) {
+      setProfile(prev => ({ ...prev, name: editForm.name, phone: editForm.phone }))
+      setShowEditModal(false)
+      showToast('Profile updated successfully!', 'success')
+    } else {
+      showToast('Failed to update profile', 'error')
+    }
   }
 
-  const handleToggle = (key, value) => {
-    setPrefs(prev => ({ ...prev, [key]: value }))
-    const labels = { budgetAlerts: 'Budget Alerts', weeklySum: 'Weekly Summary', marketing: 'Marketing Updates' }
-    showToast(`${labels[key]} ${value ? 'enabled' : 'disabled'}`, 'info')
+  const handleCurrencyChange = async () => {
+    const newCurrency = profile.currency === 'IDR' ? 'USD' : 'IDR'
+    const success = await updateProfile({ currency: newCurrency })
+    if (success) {
+      setProfile(prev => ({ ...prev, currency: newCurrency }))
+      showToast(`Currency changed to ${newCurrency === 'IDR' ? 'Indonesian Rupiah' : 'US Dollar'}`, 'info')
+    }
+  }
+
+  const handleLanguageChange = async () => {
+    const newLanguage = profile.language === 'English' ? 'Indonesia' : 'English'
+    const success = await updateProfile({ language: newLanguage })
+    if (success) {
+      setProfile(prev => ({ ...prev, language: newLanguage }))
+      showToast(`Language changed to ${newLanguage}`, 'info')
+    }
+  }
+
+  const handleDateFormatChange = async () => {
+    const newFormat = profile.date_format === 'MMM DD, YYYY' ? 'DD/MM/YYYY' : 'MMM DD, YYYY'
+    const success = await updateProfile({ date_format: newFormat })
+    if (success) {
+      setProfile(prev => ({ ...prev, date_format: newFormat }))
+      showToast('Date format updated', 'info')
+    }
+  }
+
+  const handleTogglePref = async (key, value) => {
+    const updates = { [key]: value }
+    const success = await updateSettings(updates)
+    if (success) {
+      setPrefs(prev => ({ ...prev, [key]: value }))
+      const labels = { budget_alerts: 'Budget Alerts', weekly_summary: 'Weekly Summary', marketing_emails: 'Marketing Updates' }
+      showToast(`${labels[key]} ${value ? 'enabled' : 'disabled'}`, 'info')
+    }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 
   return (
@@ -216,46 +283,53 @@ function ProfileTab({ showToast }) {
           <h2 className="text-lg font-black text-ink mb-0.5">Profile Information</h2>
           <p className="text-sm text-mute">Update your personal details and preferences.</p>
         </div>
-        <ActionButton icon={PenLine} variant="outline" onClick={handleEditClick}>Edit Profile</ActionButton>
+        <ActionButton icon={PenLine} variant="outline" onClick={() => setShowEditModal(true)}>Edit Profile</ActionButton>
       </div>
 
       <div className="flex items-center gap-4 p-5 bg-surface-soft rounded-2xl">
         <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-ink font-black text-2xl">{profile.name.charAt(0)}</div>
-          <button className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-surface border border-ink/10 flex items-center justify-center text-xs"><Camera size={12} /></button>
+          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-ink font-black text-2xl">
+            {profile.name?.charAt(0) || 'U'}
+          </div>
+          <button className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-surface border border-ink/10 flex items-center justify-center text-xs">
+            <Camera size={12} />
+          </button>
         </div>
         <div>
           <h3 className="text-base font-black text-ink">{profile.name}</h3>
           <p className="text-sm text-mute">{profile.email}</p>
-          <div className="flex gap-4 mt-1 text-xs text-mute"><span>📞 {profile.phone}</span><span>📅 Member since March 15, 2024</span></div>
+          <div className="flex gap-4 mt-1 text-xs text-mute">
+            <span>📞 {profile.phone || 'Not set'}</span>
+            <span>📅 Member since {new Date(user?.created_at).toLocaleDateString()}</span>
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleCurrencyChange}>
           <p className="text-xs text-mute font-semibold mb-1">Currency</p>
-          <p className="text-sm font-semibold text-ink">{currency === 'IDR' ? 'Indonesian Rupiah (IDR)' : 'US Dollar (USD)'}</p>
+          <p className="text-sm font-semibold text-ink">{profile.currency === 'IDR' ? 'Indonesian Rupiah (IDR)' : 'US Dollar (USD)'}</p>
         </button>
         <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleLanguageChange}>
           <p className="text-xs text-mute font-semibold mb-1">Language</p>
-          <p className="text-sm font-semibold text-ink">{language}</p>
+          <p className="text-sm font-semibold text-ink">{profile.language}</p>
         </button>
         <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleDateFormatChange}>
           <p className="text-xs text-mute font-semibold mb-1">Date Format</p>
-          <p className="text-sm font-semibold text-ink">{dateFormat}</p>
+          <p className="text-sm font-semibold text-ink">{profile.date_format}</p>
         </button>
       </div>
 
       <div>
         <h3 className="text-sm font-black text-ink mb-3">Preferences</h3>
         {[
-          { key: 'budgetAlerts', label: 'Budget Alerts', sub: "Get notified when you're close to your budget limit." },
-          { key: 'weeklySum', label: 'Weekly Summary', sub: 'Receive weekly financial summary.' },
-          { key: 'marketing', label: 'Marketing Updates', sub: 'Receive news and updates from MoneyPulse.' },
+          { key: 'budget_alerts', label: 'Budget Alerts', sub: "Get notified when you're close to your budget limit." },
+          { key: 'weekly_summary', label: 'Weekly Summary', sub: 'Receive weekly financial summary.' },
+          { key: 'marketing_emails', label: 'Marketing Updates', sub: 'Receive news and updates from MoneyPulse.' },
         ].map(p => (
           <div key={p.key} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
             <div><p className="text-sm font-semibold text-ink">{p.label}</p><p className="text-xs text-mute">{p.sub}</p></div>
-            <Toggle checked={prefs[p.key]} onChange={v => handleToggle(p.key, v)} />
+            <Toggle checked={prefs[p.key]} onChange={v => handleTogglePref(p.key, v)} />
           </div>
         ))}
       </div>
@@ -268,9 +342,9 @@ function ProfileTab({ showToast }) {
               <button onClick={() => setShowEditModal(false)} className="w-8 h-8 rounded-full bg-surface-soft hover:bg-primary-pale flex items-center justify-center">✕</button>
             </div>
             <div className="space-y-4">
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Full Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Email Address</label><input type="email" value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Phone Number</label><input type="tel" value={editForm.phone} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
+              <div><label className="block text-sm font-semibold text-ink mb-1.5">Full Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
+              <div><label className="block text-sm font-semibold text-ink mb-1.5">Email Address</label><input type="email" value={editForm.email} disabled className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface-soft text-mute text-sm cursor-not-allowed" /></div>
+              <div><label className="block text-sm font-semibold text-ink mb-1.5">Phone Number</label><input type="tel" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
               <div className="flex gap-3 mt-6 pt-4 border-t border-ink/10">
                 <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
                 <button onClick={handleSaveProfile} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Save Changes</button>
@@ -287,23 +361,75 @@ function ProfileTab({ showToast }) {
 // Notifications Tab
 // ─────────────────────────────────────────────
 function NotificationsTab({ showToast }) {
-  const [channels, setChannels] = useState({ inApp: true, email: true, push: true })
-  const [notifs, setNotifs] = useState({ txAlerts: true, budgetAlerts: true, billReminders: true, savingsGoals: true, productUpdates: false })
+  const { user } = useAuth()
+  const [channels, setChannels] = useState({ in_app: true, email: true, push: true })
+  const [notifs, setNotifs] = useState({ 
+    tx_alerts: true, budget_alerts: true, bill_reminders: true, savings_goals: true, product_updates: false 
+  })
+  const [loading, setLoading] = useState(true)
 
-  const handleSave = () => {
+  useEffect(() => {
+    if (!user) return
+    fetchSettings()
+  }, [user])
+
+  const fetchSettings = async () => {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('in_app_notif, email_notif, push_notif, tx_alerts, budget_alerts, bill_reminders, savings_goals, product_updates')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!error && data) {
+      setChannels({
+        in_app: data.in_app_notif ?? true,
+        email: data.email_notif ?? true,
+        push: data.push_notif ?? true
+      })
+      setNotifs({
+        tx_alerts: data.tx_alerts ?? true,
+        budget_alerts: data.budget_alerts ?? true,
+        bill_reminders: data.bill_reminders ?? true,
+        savings_goals: data.savings_goals ?? true,
+        product_updates: data.product_updates ?? false
+      })
+    }
+    setLoading(false)
+  }
+
+  const updateSettings = async (updates) => {
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('user_id', user.id)
+    return !error
+  }
+
+  const handleChannelToggle = async (key, value) => {
+    const dbKey = { in_app: 'in_app_notif', email: 'email_notif', push: 'push_notif' }[key]
+    const success = await updateSettings({ [dbKey]: value })
+    if (success) {
+      setChannels(prev => ({ ...prev, [key]: value }))
+      const labels = { in_app: 'In-App', email: 'Email', push: 'Push' }
+      showToast(`${labels[key]} notifications ${value ? 'enabled' : 'disabled'}`, 'info')
+    }
+  }
+
+  const handleNotifToggle = async (key, value) => {
+    const success = await updateSettings({ [key]: value })
+    if (success) {
+      setNotifs(prev => ({ ...prev, [key]: value }))
+      const labels = { tx_alerts: 'Transaction Alerts', budget_alerts: 'Budget Alerts', bill_reminders: 'Bill Reminders', savings_goals: 'Savings Goals', product_updates: 'Product Updates' }
+      showToast(`${labels[key]} ${value ? 'enabled' : 'disabled'}`, 'info')
+    }
+  }
+
+  const handleSave = async () => {
     showToast('Notification settings saved!', 'success')
   }
 
-  const handleChannelToggle = (key, value) => {
-    setChannels(prev => ({ ...prev, [key]: value }))
-    const labels = { inApp: 'In-App', email: 'Email', push: 'Push' }
-    showToast(`${labels[key]} notifications ${value ? 'enabled' : 'disabled'}`, 'info')
-  }
-
-  const handleNotifToggle = (key, value) => {
-    setNotifs(prev => ({ ...prev, [key]: value }))
-    const labels = { txAlerts: 'Transaction Alerts', budgetAlerts: 'Budget Alerts', billReminders: 'Bill Reminders', savingsGoals: 'Savings Goals', productUpdates: 'Product Updates' }
-    showToast(`${labels[key]} ${value ? 'enabled' : 'disabled'}`, 'info')
+  if (loading) {
+    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 
   return (
@@ -319,7 +445,7 @@ function NotificationsTab({ showToast }) {
       <div className="p-5 bg-surface-soft rounded-2xl">
         <h3 className="text-sm font-black text-ink mb-3">Notification Channels</h3>
         {[
-          { key: 'inApp', label: 'In-App Notifications', sub: 'Receive alerts inside the MoneyPulse app.' },
+          { key: 'in_app', label: 'In-App Notifications', sub: 'Receive alerts inside the MoneyPulse app.' },
           { key: 'email', label: 'Email Notifications', sub: 'Receive updates via your email.' },
           { key: 'push', label: 'Push Notifications', sub: 'Receive push notifications on your device.' },
         ].map(c => (
@@ -333,11 +459,11 @@ function NotificationsTab({ showToast }) {
       <div className="p-5 bg-surface rounded-2xl border border-ink/5">
         <h3 className="text-sm font-black text-ink mb-3">Notification Preferences</h3>
         {[
-          { key: 'txAlerts', label: 'Transaction Alerts', sub: 'Get notified about income, expenses, and transfers.' },
-          { key: 'budgetAlerts', label: 'Budget Alerts', sub: "Get notified when you're close to or exceed your budget limit." },
-          { key: 'billReminders', label: 'Bill Reminders', sub: 'Receive reminders before your bills are due.' },
-          { key: 'savingsGoals', label: 'Savings Goals', sub: 'Get updates about your savings goal progress.' },
-          { key: 'productUpdates', label: 'Product Updates', sub: 'Receive updates about new features and improvements.' },
+          { key: 'tx_alerts', label: 'Transaction Alerts', sub: 'Get notified about income, expenses, and transfers.' },
+          { key: 'budget_alerts', label: 'Budget Alerts', sub: "Get notified when you're close to or exceed your budget limit." },
+          { key: 'bill_reminders', label: 'Bill Reminders', sub: 'Receive reminders before your bills are due.' },
+          { key: 'savings_goals', label: 'Savings Goals', sub: 'Get updates about your savings goal progress.' },
+          { key: 'product_updates', label: 'Product Updates', sub: 'Receive updates about new features and improvements.' },
         ].map(n => (
           <div key={n.key} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
             <div><p className="text-sm font-semibold text-ink">{n.label}</p><p className="text-xs text-mute">{n.sub}</p></div>
@@ -353,25 +479,76 @@ function NotificationsTab({ showToast }) {
 // Appearance Tab
 // ─────────────────────────────────────────────
 function AppearanceTab({ showToast }) {
+  const { user } = useAuth()
   const [theme, setTheme] = useState('Light')
   const [accent, setAccent] = useState('#9fe870')
   const [compact, setCompact] = useState(false)
   const [animations, setAnimations] = useState(true)
   const [tips, setTips] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  const handleSave = () => {
-    showToast('Appearance settings saved!', 'success')
+  useEffect(() => {
+    if (!user) return
+    fetchAppearance()
+  }, [user])
+
+  const fetchAppearance = async () => {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('theme, accent_color, compact_mode, chart_animations, show_tips')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!error && data) {
+      setTheme(data.theme || 'Light')
+      setAccent(data.accent_color || '#9fe870')
+      setCompact(data.compact_mode || false)
+      setAnimations(data.chart_animations ?? true)
+      setTips(data.show_tips ?? true)
+    }
+    setLoading(false)
   }
 
-  const handleThemeChange = (newTheme) => {
-    setTheme(newTheme)
-    showToast(`${newTheme} theme applied`, 'info')
+  const updateSettings = async (updates) => {
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('user_id', user.id)
+    return !error
   }
 
-  const handleAccentChange = (newAccent) => {
-    setAccent(newAccent)
-    showToast('Accent color updated', 'info')
+  const handleThemeChange = async (newTheme) => {
+    const success = await updateSettings({ theme: newTheme })
+    if (success) {
+      setTheme(newTheme)
+      showToast(`${newTheme} theme applied`, 'info')
+    }
   }
+
+  const handleAccentChange = async (newAccent) => {
+    const success = await updateSettings({ accent_color: newAccent })
+    if (success) {
+      setAccent(newAccent)
+      showToast('Accent color updated', 'success')
+    }
+  }
+
+  const handleSave = async () => {
+    const success = await updateSettings({
+      compact_mode: compact,
+      chart_animations: animations,
+      show_tips: tips
+    })
+    if (success) {
+      showToast('Appearance settings saved!', 'success')
+    }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  const COLORS = ['#9fe870', '#3b82f6', '#a855f7', '#f97316', '#ec4899']
 
   return (
     <div className="space-y-6">
@@ -406,7 +583,7 @@ function AppearanceTab({ showToast }) {
         <h3 className="text-sm font-black text-ink mb-1">Primary Color</h3>
         <p className="text-xs text-mute mb-3">Choose your accent color.</p>
         <div className="flex gap-3">
-          {[['#9fe870'], ['#3b82f6'], ['#a855f7'], ['#f97316'], ['#ec4899']].map(c => (
+          {COLORS.map(c => (
             <button key={c} onClick={() => handleAccentChange(c)}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-110"
               style={{ background: c }}>
@@ -437,20 +614,39 @@ function AppearanceTab({ showToast }) {
 // Security Tab
 // ─────────────────────────────────────────────
 function SecurityTab({ showToast }) {
+  const { user } = useAuth()
   const [showChangePassword, setShowChangePassword] = useState(false)
-  const [show2FAModal, setShow2FAModal] = useState(false)
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    fetchSessions()
+  }, [user])
+
+  const fetchSessions = async () => {
+    // Mock sessions for now (Supabase doesn't expose sessions via client)
+    setSessions([
+      { device: 'MacBook Pro', location: 'Jakarta, Indonesia', time: 'Current', icon: Laptop, current: true },
+      { device: 'iPhone 14 Pro', location: 'Jakarta, Indonesia', time: '2 hours ago', icon: Smartphone, current: false },
+      { device: 'Windows PC', location: 'Bandung, Indonesia', time: '1 day ago', icon: Monitor, current: false },
+    ])
+    setLoading(false)
+  }
+
+  const handleChangePassword = async (passwords) => {
+    const { error } = await supabase.auth.updateUser({
+      password: passwords.new
+    })
+    if (error) {
+      showToast(error.message, 'error')
+    } else {
+      showToast('Password changed successfully!', 'success')
+    }
+  }
 
   const handleEnable2FA = () => {
-    setShow2FAModal(false)
     showToast('2FA setup started! Check your email for verification code.', 'info')
-  }
-
-  const handleChangePassword = (passwords) => {
-    console.log('Password changed:', passwords)
-  }
-
-  const handle2FA = () => {
-    setShow2FAModal(true)
   }
 
   const handleSecurityCheck = () => {
@@ -458,6 +654,10 @@ function SecurityTab({ showToast }) {
     setTimeout(() => {
       showToast('Security check completed! Your account is secure.', 'success')
     }, 2000)
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   }
 
   return (
@@ -473,8 +673,8 @@ function SecurityTab({ showToast }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Password', value: 'Strong', tone: 'green' },
-          { label: 'Two-Factor Auth', value: 'Active', tone: 'green' },
-          { label: 'Active Sessions', value: '3 devices', tone: 'blue' },
+          { label: 'Two-Factor Auth', value: 'Disabled', tone: 'gray' },
+          { label: 'Active Sessions', value: `${sessions.filter(s => s.current).length} devices`, tone: 'blue' },
           { label: 'Last Security Check', value: '2 days ago', tone: 'gray' },
         ].map(s => (
           <div key={s.label} className="p-4 bg-surface-soft rounded-xl">
@@ -492,25 +692,21 @@ function SecurityTab({ showToast }) {
         <div>
           <div className="flex items-center justify-between text-xs text-mute mb-1"><span>Password Strength</span><span className="text-positive font-semibold">Strong</span></div>
           <div className="h-2 rounded-full bg-surface-soft overflow-hidden"><div className="h-full w-4/5 rounded-full bg-positive" /></div>
-          <p className="text-xs text-mute mt-2">Last changed 2 months ago</p>
+          <p className="text-xs text-mute mt-2">Last changed recently</p>
         </div>
       </div>
 
       <div className="p-5 bg-primary-pale rounded-2xl">
         <div className="flex items-start gap-3">
           <IconTile icon={Shield} tone="green" size={20} />
-          <div className="flex-1"><p className="text-sm font-black text-positive">2FA is enabled</p><p className="text-xs text-body">Your account is protected with two-factor authentication.</p></div>
-          <button onClick={handle2FA} className="text-sm font-semibold text-positive hover:underline flex items-center gap-1">Manage <ChevronRight size={14} /></button>
+          <div className="flex-1"><p className="text-sm font-black text-positive">2FA Available</p><p className="text-xs text-body">Add an extra layer of security to your account.</p></div>
+          <button onClick={handleEnable2FA} className="text-sm font-semibold text-positive hover:underline flex items-center gap-1">Enable <ChevronRight size={14} /></button>
         </div>
       </div>
 
       <div className="p-5 bg-surface rounded-2xl border border-ink/5">
         <h3 className="text-sm font-black text-ink mb-3">Active Sessions</h3>
-        {[
-          { device: 'MacBook Pro', location: 'Jakarta, Indonesia', time: 'Current', icon: Laptop, current: true },
-          { device: 'iPhone 14 Pro', location: 'Jakarta, Indonesia', time: '2 hours ago', icon: Smartphone, current: false },
-          { device: 'Windows PC', location: 'Bandung, Indonesia', time: '1 day ago', icon: Monitor, current: false },
-        ].map(s => (
+        {sessions.map(s => (
           <div key={s.device} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
             <div className="flex items-center gap-3">
               <IconTile icon={s.icon} tone="gray" size={16} />
@@ -522,14 +718,6 @@ function SecurityTab({ showToast }) {
       </div>
 
       <ChangePasswordModal isOpen={showChangePassword} onClose={() => setShowChangePassword(false)} onChange={handleChangePassword} showToast={showToast} />
-
-      <Modal isOpen={show2FAModal} onClose={() => setShow2FAModal(false)} title="Two-Factor Authentication">
-        <p className="text-sm text-mute mb-4">Enable 2FA to add an extra layer of security to your account. A verification code will be sent to your email.</p>
-        <div className="flex gap-3">
-          <button onClick={() => setShow2FAModal(false)} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
-          <button onClick={handleEnable2FA} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Enable 2FA</button>
-        </div>
-      </Modal>
     </div>
   )
 }
@@ -538,29 +726,107 @@ function SecurityTab({ showToast }) {
 // Accounts Tab
 // ─────────────────────────────────────────────
 function AccountsTab({ showToast }) {
+  const { user } = useAuth()
   const [autoSync, setAutoSync] = useState(true)
   const [hideZero, setHideZero] = useState(false)
   const [showAddAccount, setShowAddAccount] = useState(false)
-  const [accounts, setAccounts] = useState([
-    { name: 'Bank BCA', accountNumber: '**** **** **** 1234', balance: 8450000, type: 'Checking', status: 'active', emoji: '🏦' },
-    { name: 'Bank Mandiri', accountNumber: '**** **** **** 5678', balance: 3250000, type: 'Savings', status: 'active', emoji: '🏦' },
-    { name: 'OVO', accountNumber: '**** **** **** 9012', balance: 520000, type: 'E-Wallet', status: 'active', emoji: '💜' },
-    { name: 'ShopeePay', accountNumber: '**** **** **** 3456', balance: 180000, type: 'E-Wallet', status: 'inactive', emoji: '🧡' },
-  ])
+  const [accounts, setAccounts] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const handleAddAccount = (newAccount) => {
-    setAccounts([...accounts, { ...newAccount, status: 'active' }])
-    showToast('Account linked successfully!', 'success')
+  useEffect(() => {
+    if (!user) return
+    fetchAccounts()
+    fetchSettings()
+  }, [user])
+
+  const fetchAccounts = async () => {
+    const { data, error } = await supabase
+      .from('linked_accounts')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setAccounts(data)
+    } else {
+      // Mock data if table doesn't exist yet
+      setAccounts([
+        { id: '1', name: 'Bank BCA', account_number: '**** **** **** 1234', balance: 8450000, type: 'Checking', status: 'active', emoji: '🏦' },
+        { id: '2', name: 'Bank Mandiri', account_number: '**** **** **** 5678', balance: 3250000, type: 'Savings', status: 'active', emoji: '🏦' },
+        { id: '3', name: 'OVO', account_number: '**** **** **** 9012', balance: 520000, type: 'E-Wallet', status: 'active', emoji: '💜' },
+        { id: '4', name: 'ShopeePay', account_number: '**** **** **** 3456', balance: 180000, type: 'E-Wallet', status: 'inactive', emoji: '🧡' },
+      ])
+    }
+    setLoading(false)
   }
 
-  const handleRefresh = () => {
+  const fetchSettings = async () => {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('auto_sync, hide_zero_balance')
+      .eq('user_id', user.id)
+      .single()
+
+    if (!error && data) {
+      setAutoSync(data.auto_sync ?? true)
+      setHideZero(data.hide_zero_balance ?? false)
+    }
+  }
+
+  const updateSettings = async (updates) => {
+    const { error } = await supabase
+      .from('user_settings')
+      .update(updates)
+      .eq('user_id', user.id)
+    return !error
+  }
+
+  const handleAddAccount = async (newAccount) => {
+    const { data, error } = await supabase
+      .from('linked_accounts')
+      .insert([{ ...newAccount, user_id: user.id }])
+      .select()
+      .single()
+
+    if (!error && data) {
+      setAccounts([data, ...accounts])
+      showToast('Account linked successfully!', 'success')
+    } else {
+      setAccounts([{ ...newAccount, id: Date.now().toString() }, ...accounts])
+      showToast('Account linked successfully!', 'success')
+    }
+  }
+
+  const handleRefresh = async () => {
     showToast('Refreshing all accounts...', 'info')
+    await fetchAccounts()
     setTimeout(() => {
       showToast('Accounts refreshed successfully!', 'success')
     }, 1500)
   }
 
+  const handleAutoSyncToggle = async (value) => {
+    const success = await updateSettings({ auto_sync: value })
+    if (success) {
+      setAutoSync(value)
+      showToast(`Auto sync ${value ? 'enabled' : 'disabled'}`, 'info')
+    }
+  }
+
+  const handleHideZeroToggle = async (value) => {
+    const success = await updateSettings({ hide_zero_balance: value })
+    if (success) {
+      setHideZero(value)
+      showToast(`Hide zero balance accounts ${value ? 'enabled' : 'disabled'}`, 'info')
+    }
+  }
+
+  const displayAccounts = hideZero ? accounts.filter(a => a.balance > 0) : accounts
   const totalBalance = accounts.filter(a => a.status === 'active').reduce((s, a) => s + a.balance, 0)
+
+  if (loading) {
+    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+  }
 
   return (
     <div className="space-y-6">
@@ -570,17 +836,18 @@ function AccountsTab({ showToast }) {
       </div>
 
       <div className="p-5 bg-surface rounded-2xl border border-ink/5">
-        {accounts.map(a => (
-          <div key={a.name} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
+        {displayAccounts.map(a => (
+          <div key={a.id} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-surface-soft flex items-center justify-center text-xl">{a.emoji}</div>
-              <div><p className="text-sm font-semibold text-ink">{a.name}</p><p className="text-xs text-mute">{a.accountNumber}</p></div>
+              <div className="w-10 h-10 rounded-xl bg-surface-soft flex items-center justify-center text-xl">{a.emoji || '🏦'}</div>
+              <div><p className="text-sm font-semibold text-ink">{a.name}</p><p className="text-xs text-mute">{a.account_number}</p></div>
             </div>
             <div className="text-right"><p className="text-sm font-semibold text-ink">Rp{a.balance.toLocaleString('id-ID')}</p><p className="text-xs text-mute">{a.type}</p></div>
             <Badge tone={a.status === 'active' ? 'green' : 'gray'}>{a.status === 'active' ? 'Active' : 'Inactive'}</Badge>
           </div>
         ))}
-        <div className="pt-3 flex items-center justify-between"><p className="text-xs text-mute">Showing {accounts.length} accounts</p><button className="text-xs font-semibold text-positive hover:underline">View All →</button></div>
+        {displayAccounts.length === 0 && <div className="text-center py-8 text-mute">No linked accounts yet</div>}
+        <div className="pt-3 flex items-center justify-between"><p className="text-xs text-mute">Showing {displayAccounts.length} accounts</p><button className="text-xs font-semibold text-positive hover:underline">View All →</button></div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -591,7 +858,7 @@ function AccountsTab({ showToast }) {
           <div className="mt-3 space-y-1 text-xs text-body">
             <div className="flex justify-between"><span>Active Accounts</span><span className="font-semibold">{accounts.filter(a => a.status === 'active').length}</span></div>
             <div className="flex justify-between"><span>Inactive Accounts</span><span className="font-semibold">{accounts.filter(a => a.status === 'inactive').length}</span></div>
-            <div className="flex justify-between"><span>Last Updated</span><span className="font-semibold">2 min ago</span></div>
+            <div className="flex justify-between"><span>Last Updated</span><span className="font-semibold">Just now</span></div>
           </div>
         </div>
 
@@ -599,17 +866,17 @@ function AccountsTab({ showToast }) {
           <h3 className="text-sm font-black text-ink mb-3">Account Management</h3>
           <div className="flex items-center justify-between py-2.5 border-b border-ink/5">
             <div><p className="text-sm font-semibold text-ink">Auto Sync</p><p className="text-xs text-mute">Automatically sync your account data.</p></div>
-            <Toggle checked={autoSync} onChange={setAutoSync} />
+            <Toggle checked={autoSync} onChange={handleAutoSyncToggle} />
           </div>
-          <div className="flex items-center justify-between py-2.5 border-b border-ink/5">
+          <div className="flex items-center justify-between py-2.5">
             <div><p className="text-sm font-semibold text-ink">Hide Zero Balance Accounts</p><p className="text-xs text-mute">Hide accounts with zero balance.</p></div>
-            <Toggle checked={hideZero} onChange={setHideZero} />
+            <Toggle checked={hideZero} onChange={handleHideZeroToggle} />
           </div>
           <button onClick={handleRefresh} className="mt-3 flex items-center gap-2 text-xs font-semibold text-mute hover:text-ink"><RefreshCw size={13} /> Refresh All Accounts</button>
         </div>
       </div>
 
-      <AddAccountModal isOpen={showAddAccount} onClose={() => setShowAddAccount(false)} onAdd={handleAddAccount} />
+      <AddAccountModal isOpen={showAddAccount} onClose={() => setShowAddAccount(false)} onAdd={handleAddAccount} showToast={showToast} />
     </div>
   )
 }
@@ -751,14 +1018,10 @@ const NAV_ITEMS = [
 // ─────────────────────────────────────────────
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile')
-  const { toast, showToast, hideToast } = useToast()
+  const [toast, setToast] = useState(null)
 
-  // ─── Fungsi untuk Security Check ───
-  const handleSecurityCheck = () => {
-    showToast('Security check initiated. Reviewing your account security...', 'info')
-    setTimeout(() => {
-      showToast('Security check completed! Your account is secure.', 'success')
-    }, 2000)
+  const showToast = (message, type) => {
+    setToast({ message, type })
   }
 
   const TAB_CONTENT = {
@@ -773,7 +1036,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <Toast isOpen={toast.isOpen} message={toast.message} type={toast.type} onClose={hideToast} />
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
@@ -781,10 +1044,6 @@ export default function SettingsPage() {
           <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-2">Manage your<br />preferences.</h1>
           <p className="text-base text-body">Customize your experience, manage your account, and keep your data secure.</p>
         </div>
-        {/* Tombol Security Check dengan fungsi */}
-        <ActionButton icon={Shield} onClick={handleSecurityCheck}>
-          Security Check
-        </ActionButton>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-6">

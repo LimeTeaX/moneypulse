@@ -1,36 +1,43 @@
 // src/pages/Analytics.jsx
-// Analytics dengan data real dari transaksi
+// ─────────────────────────────────────────────
+// Analytics Page — Dynamic charts from real Supabase data
+// Income vs Expense line chart, Expense breakdown donut, Spending heatmap
+// ─────────────────────────────────────────────
 
 import { useState, useMemo } from 'react'
-import { Badge, Card, IconTile, SectionHeader } from '../components/common'
+import { Badge, Card, IconTile } from '../components/common'
 import { ArrowDownRight, TrendingUp, Target, TrendingDown } from 'lucide-react'
+import { useTransactions } from '../hooks/useTransactions'
 
-// ─── Helper: group transaksi per bulan ───────
-function groupByMonth(transactions) {
-  const months = {}
+// ─────────────────────────────────────────────
+// Helper: group transactions by month
+// ─────────────────────────────────────────────
+const groupByMonth = (transactions) => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Ags', 'Sep', 'Okt', 'Nov', 'Des']
+  const monthly = {}
   
   transactions.forEach(t => {
     const date = new Date(t.date)
     const key = `${date.getFullYear()}-${date.getMonth()}`
     const monthLabel = monthNames[date.getMonth()]
     
-    if (!months[key]) {
-      months[key] = { label: monthLabel, income: 0, expense: 0, fullDate: date }
+    if (!monthly[key]) {
+      monthly[key] = { label: monthLabel, income: 0, expense: 0, fullDate: date }
     }
     if (t.positive) {
-      months[key].income += t.amount
+      monthly[key].income += t.amount
     } else {
-      months[key].expense += Math.abs(t.amount)
+      monthly[key].expense += Math.abs(t.amount)
     }
   })
   
-  // Urutkan berdasarkan tanggal
-  const sorted = Object.values(months).sort((a, b) => a.fullDate - b.fullDate)
-  return sorted.slice(-6) // ambil 6 bulan terakhir
+  const sorted = Object.values(monthly).sort((a, b) => a.fullDate - b.fullDate)
+  return sorted.slice(-6)
 }
 
-// ─── Income vs Expense line chart (SVG dinamis) ───────
+// ─────────────────────────────────────────────
+// Income vs Expense Line Chart (SVG)
+// ─────────────────────────────────────────────
 function LineChart({ incomeData, expenseData, months }) {
   const maxVal = Math.max(...[...incomeData, ...expenseData], 1000)
   const W = 560, H = 200, PAD = { t: 16, b: 32, l: 48, r: 16 }
@@ -46,7 +53,7 @@ function LineChart({ incomeData, expenseData, months }) {
   }
 
   if (incomeData.length === 0 && expenseData.length === 0) {
-    return <div className="text-center py-16 text-mute">Belum ada data transaksi</div>
+    return <div className="text-center py-16 text-mute">No transaction data yet</div>
   }
 
   return (
@@ -81,16 +88,20 @@ function LineChart({ incomeData, expenseData, months }) {
   )
 }
 
-// ─── Expense donut chart dari data real ──────
+// ─────────────────────────────────────────────
+// Expense Donut Chart from real data
+// ─────────────────────────────────────────────
 function DonutChart({ expensesByCategory }) {
   const total = Object.values(expensesByCategory).reduce((a, b) => a + b, 0)
   if (total === 0) {
-    return <div className="text-center py-16 text-mute">Belum ada data pengeluaran</div>
+    return <div className="text-center py-16 text-mute">No expense data yet</div>
   }
 
   const R = 80, r = 50, CX = 100, CY = 100
   let angle = -90
-  const arcs = Object.entries(expensesByCategory).map(([label, amount]) => {
+  const colors = ['#9fe870', '#ffd11a', '#38c8ff', '#a78bfa', '#ffc091', '#d1d5db', '#f97316', '#ec4899']
+  
+  const arcs = Object.entries(expensesByCategory).map(([label, amount], idx) => {
     const pct = (amount / total) * 100
     const startAngle = angle
     const sweep = pct * 3.6
@@ -105,8 +116,7 @@ function DonutChart({ expensesByCategory }) {
     const xi2 = CX + r * Math.cos(toRad(angle))
     const yi2 = CY + r * Math.sin(toRad(angle))
     const lg = sweep > 180 ? 1 : 0
-    const colors = ['#9fe870', '#ffd11a', '#38c8ff', '#a78bfa', '#ffc091', '#d1d5db', '#f97316', '#ec4899']
-    return { label, pct, d: `M${x1},${y1} A${R},${R},0,${lg},1,${x2},${y2} L${xi2},${yi2} A${r},${r},0,${lg},0,${xi1},${yi1} Z`, color: colors[Object.keys(expensesByCategory).indexOf(label) % colors.length] }
+    return { label, pct, d: `M${x1},${y1} A${R},${R},0,${lg},1,${x2},${y2} L${xi2},${yi2} A${r},${r},0,${lg},0,${xi1},${yi1} Z`, color: colors[idx % colors.length] }
   })
 
   return (
@@ -131,30 +141,30 @@ function DonutChart({ expensesByCategory }) {
   )
 }
 
-// ─── Spending heatmap dari data real ─────────
+// ─────────────────────────────────────────────
+// Spending Heatmap from real data
+// ─────────────────────────────────────────────
 function Heatmap({ transactions }) {
   const days = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
   const weeks = ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4']
   
-  // Hitung spending per hari dalam 4 minggu terakhir
   const now = new Date()
   const cells = Array.from({ length: 7 }, () => Array(4).fill(0))
   const counts = Array.from({ length: 7 }, () => Array(4).fill(0))
   
   transactions.forEach(t => {
-    if (t.positive) return // hanya expense
+    if (t.positive) return
     const date = new Date(t.date)
     const diffDays = Math.floor((now - date) / 86400000)
-    if (diffDays > 28) return // hanya 4 minggu terakhir
+    if (diffDays > 28) return
     const weekIdx = Math.floor(diffDays / 7)
-    const dayIdx = date.getDay() // 0-6, 0 = Minggu
+    const dayIdx = date.getDay()
     if (weekIdx >= 0 && weekIdx < 4 && dayIdx >= 0 && dayIdx < 7) {
       cells[dayIdx][weekIdx] += Math.abs(t.amount)
       counts[dayIdx][weekIdx]++
     }
   })
   
-  // Normalisasi intensity 0-4
   const maxSpend = Math.max(...cells.flat(), 1)
   const intensityClass = val => {
     const intensity = Math.floor((val / maxSpend) * 5)
@@ -188,19 +198,22 @@ function Heatmap({ transactions }) {
   )
 }
 
-// ─── Main Analytics Page ──────────────────────
-export default function AnalyticsPage({ transactions = [] }) {
+// ─────────────────────────────────────────────
+// Main Analytics Page
+// ─────────────────────────────────────────────
+export default function AnalyticsPage() {
+  const { transactions, loading } = useTransactions()
   const [period, setPeriod] = useState('Monthly')
 
-  // Hitung stat dari data real
-  const totalIncome = transactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
-  const totalExpense = Math.abs(transactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
+  // Calculate stats from real data
+  const totalIncome = transactions?.filter(t => t.positive).reduce((s, t) => s + t.amount, 0) || 0
+  const totalExpense = Math.abs(transactions?.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0) || 0)
   const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
-  const investmentGrowth = 2450000 // masih hardcoded, bisa dikembangin
+  const investmentGrowth = 2450000 // placeholder, bisa dikembangkan dengan data investasi real nanti
 
-  // Group by category for donut (hanya expense)
+  // Group by category for donut (only expenses)
   const expensesByCategory = {}
-  transactions.forEach(t => {
+  transactions?.forEach(t => {
     if (!t.positive) {
       const cat = t.category
       expensesByCategory[cat] = (expensesByCategory[cat] || 0) + Math.abs(t.amount)
@@ -208,21 +221,29 @@ export default function AnalyticsPage({ transactions = [] }) {
   })
 
   // Group by month for line chart
-  const monthlyData = groupByMonth(transactions)
+  const monthlyData = groupByMonth(transactions || [])
   const incomeData = monthlyData.map(m => m.income)
   const expenseData = monthlyData.map(m => m.expense)
   const months = monthlyData.map(m => m.label)
 
   const STATS = [
-    { label: 'Total Spending',    value: `Rp${(totalExpense / 1000000).toFixed(1)}M`, change: '-2.4% vs last month',  icon: ArrowDownRight, tone: 'red' },
-    { label: 'Total Income',      value: `Rp${(totalIncome / 1000000).toFixed(1)}M`, change: '+8.1% vs last month',  icon: TrendingUp,    tone: 'green' },
-    { label: 'Savings Rate',      value: `${savingsRate}%`,         change: '+5% vs last month',    icon: Target,        tone: 'green' },
-    { label: 'Investment Growth', value: `Rp${(investmentGrowth / 1000000).toFixed(1)}M`, change: '+12.7% vs last month', icon: TrendingUp,    tone: 'green' },
+    { label: 'Total Spending', value: `Rp${(totalExpense / 1000000).toFixed(1)}M`, change: '-2.4% vs last month', icon: ArrowDownRight, tone: 'red' },
+    { label: 'Total Income', value: `Rp${(totalIncome / 1000000).toFixed(1)}M`, change: '+8.1% vs last month', icon: TrendingUp, tone: 'green' },
+    { label: 'Savings Rate', value: `${savingsRate}%`, change: '+5% vs last month', icon: Target, tone: 'green' },
+    { label: 'Investment Growth', value: `Rp${(investmentGrowth / 1000000).toFixed(1)}M`, change: '+12.7% vs last month', icon: TrendingUp, tone: 'green' },
   ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <>
-      {/* ── Page Header ── */}
+      {/* Page Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-primary mb-2">Analytics Overview</p>
@@ -234,7 +255,7 @@ export default function AnalyticsPage({ transactions = [] }) {
         </div>
       </div>
 
-      {/* ── Stat Cards ── */}
+      {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {STATS.map(s => (
           <Card key={s.label}>
@@ -248,8 +269,9 @@ export default function AnalyticsPage({ transactions = [] }) {
         ))}
       </div>
 
-      {/* ── Charts Row ── */}
+      {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Line Chart */}
         <Card className="lg:col-span-3">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-black tracking-tight text-ink">Income vs Expense</h2>
@@ -265,19 +287,21 @@ export default function AnalyticsPage({ transactions = [] }) {
           <LineChart incomeData={incomeData} expenseData={expenseData} months={months} />
         </Card>
 
+        {/* Donut Chart */}
         <Card className="lg:col-span-2">
           <h2 className="text-lg font-black tracking-tight text-ink mb-4">Expense Breakdown</h2>
           <DonutChart expensesByCategory={expensesByCategory} />
         </Card>
       </div>
 
-      {/* ── Heatmap + Smart Insight ── */}
+      {/* Heatmap + Smart Insight */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         <Card className="lg:col-span-3">
           <h2 className="text-lg font-black tracking-tight text-ink mb-4">Spending Heatmap</h2>
-          <Heatmap transactions={transactions} />
+          <Heatmap transactions={transactions || []} />
         </Card>
 
+        {/* Smart Insight Card */}
         <div className="lg:col-span-2 bg-ink rounded-2xl p-6 flex flex-col justify-between">
           <p className="text-xs font-black uppercase tracking-widest text-primary mb-4">Smart Insight</p>
           <div className="flex items-start gap-4 mb-6">

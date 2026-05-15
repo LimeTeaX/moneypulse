@@ -1,7 +1,10 @@
 // src/pages/Dashboard.jsx
-// Full Tailwind refactor — zero custom CSS
+// ─────────────────────────────────────────────
+// Dashboard Page — Available Balance & Savings Goal connected to Supabase
+// Full Tailwind, all functions working, Edit Goal with Modal
+// ─────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight,
   BarChart3, Plus, TrendingUp, WalletCards
@@ -10,12 +13,17 @@ import {
   Badge, Card, IconTile, ActionButton, Modal,
   FormGroup, Input, Select, RoundIconButton
 } from '../components/common'
+import { useTransactions } from '../hooks/useTransactions'
+import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
-// ─── Add Transaction Modal ───────────────────
+// ─────────────────────────────────────────────
+// Add Transaction Modal
+// ─────────────────────────────────────────────
 function AddTransactionModal({ isOpen, onClose, onAdd }) {
-  const [formName, setFormName]     = useState('')
+  const [formName, setFormName] = useState('')
   const [formAmount, setFormAmount] = useState('')
-  const [formType, setFormType]     = useState('expense')
+  const [formType, setFormType] = useState('expense')
   const [formDetail, setFormDetail] = useState('')
 
   const handleSubmit = (e) => {
@@ -25,7 +33,7 @@ function AddTransactionModal({ isOpen, onClose, onAdd }) {
     if (isNaN(amountNum) || amountNum <= 0) return alert('Please enter a valid amount')
     const finalAmount = formType === 'expense' ? -Math.abs(amountNum) : Math.abs(amountNum)
     onAdd({
-      id: Date.now(),
+      id: Date.now().toString(),
       name: formName,
       detail: formDetail || '',
       category: formType === 'income' ? 'Income' : 'Other',
@@ -44,18 +52,12 @@ function AddTransactionModal({ isOpen, onClose, onAdd }) {
       <form onSubmit={handleSubmit}>
         <FormGroup label="Transaction Type">
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setFormType('expense')}
-              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'expense' ? 'bg-danger text-white' : 'bg-red-50 text-danger'}`}
-            >
+            <button type="button" onClick={() => setFormType('expense')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'expense' ? 'bg-danger text-white' : 'bg-red-50 text-danger'}`}>
               Expense
             </button>
-            <button
-              type="button"
-              onClick={() => setFormType('income')}
-              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'income' ? 'bg-positive text-white' : 'bg-primary-pale text-positive'}`}
-            >
+            <button type="button" onClick={() => setFormType('income')}
+              className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-colors ${formType === 'income' ? 'bg-positive text-white' : 'bg-primary-pale text-positive'}`}>
               Income
             </button>
           </div>
@@ -70,58 +72,189 @@ function AddTransactionModal({ isOpen, onClose, onAdd }) {
           <Input value={formDetail} onChange={e => setFormDetail(e.target.value)} placeholder="Additional notes" />
         </FormGroup>
         <div className="flex gap-3 mt-6">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">
-            Cancel
-          </button>
-          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">
-            Add Transaction
-          </button>
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Add Transaction</button>
         </div>
       </form>
     </Modal>
   )
 }
 
-// ─── Dashboard Page ──────────────────────────
-export default function DashboardPage({ transactions = [], onAddTransaction, onNavigate }) {
-  const [showModal, setShowModal] = useState(false)
+// ─────────────────────────────────────────────
+// Modal Edit Savings Goal
+// ─────────────────────────────────────────────
+function EditGoalModal({ isOpen, onClose, onSave, currentTarget, currentName }) {
+  const [target, setTarget] = useState(currentTarget)
+  const [name, setName] = useState(currentName)
 
-  // Compute live stats
-  const totalBalance    = transactions.reduce((s, t) => s + t.amount, 0)
-  const monthlyIncome   = transactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
-  const monthlyExpense  = Math.abs(transactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
-  const latest          = transactions.slice(0, 5)
+  useEffect(() => {
+    setTarget(currentTarget)
+    setName(currentName)
+  }, [currentTarget, currentName, isOpen])
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!target || target <= 0) {
+      alert('Please enter a valid target amount')
+      return
+    }
+    onSave({ target, name })
+    onClose()
+  }
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Savings Goal">
+      <form onSubmit={handleSubmit}>
+        <FormGroup label="Goal Name">
+          <Input 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            placeholder="e.g., Emergency Fund, Vacation, House Down Payment"
+          />
+        </FormGroup>
+        <FormGroup label="Target Amount (IDR)">
+          <Input 
+            type="number" 
+            value={target} 
+            onChange={e => setTarget(parseInt(e.target.value) || 0)} 
+            placeholder="0"
+          />
+        </FormGroup>
+        <div className="flex gap-3 mt-6">
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Save Goal</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Dashboard Page Main Component
+// ─────────────────────────────────────────────
+export default function DashboardPage({ onNavigate }) {
+  const { user } = useAuth()
+  const { transactions, addTransaction, deleteTransaction, loading } = useTransactions()
+  const [showModal, setShowModal] = useState(false)
+  const [isEditGoalOpen, setIsEditGoalOpen] = useState(false)
+  const [savingsTarget, setSavingsTarget] = useState(10000000)
+  const [savingsName, setSavingsName] = useState('Emergency Fund')
+
+  // ─── Fetch savings goal from Supabase ───
+  useEffect(() => {
+    if (!user) return
+    fetchSavingsGoal()
+  }, [user])
+
+  const fetchSavingsGoal = async () => {
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('savings_target, savings_name')
+      .eq('user_id', user.id)
+      .single()
+    
+    if (data && !error) {
+      setSavingsTarget(data.savings_target || 10000000)
+      setSavingsName(data.savings_name || 'Emergency Fund')
+    }
+  }
+
+  const updateSavingsGoal = async (target, name) => {
+    const { error } = await supabase
+      .from('user_settings')
+      .update({ savings_target: target, savings_name: name })
+      .eq('user_id', user.id)
+    
+    if (!error) {
+      setSavingsTarget(target)
+      setSavingsName(name)
+    }
+  }
+
+  // ─── Helper functions for statistics ───
+  const getMonthYear = (date) => {
+    const d = new Date(date)
+    return `${d.getFullYear()}-${d.getMonth()}`
+  }
+
+  const calculateMonthlyTotals = (transactions) => {
+    const monthly = {}
+    transactions.forEach(t => {
+      const monthKey = getMonthYear(t.date)
+      if (!monthly[monthKey]) {
+        monthly[monthKey] = { income: 0, expense: 0 }
+      }
+      if (t.positive) {
+        monthly[monthKey].income += t.amount
+      } else {
+        monthly[monthKey].expense += Math.abs(t.amount)
+      }
+    })
+    return monthly
+  }
+
+  const calculatePercentageChange = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0
+    return ((current - previous) / previous) * 100
+  }
+
+  const formatPercent = (value) => {
+    const sign = value > 0 ? '+' : ''
+    return `${sign}${value.toFixed(1)}%`
+  }
+
+  // ─── Calculate all stats from real data ───
+  const totalBalance = transactions?.reduce((s, t) => s + (t.amount || 0), 0) || 0
+  const savingsPercentage = Math.min(100, Math.round((totalBalance / savingsTarget) * 100))
+  
+  const monthlyTotals = calculateMonthlyTotals(transactions || [])
+  const months = Object.keys(monthlyTotals).sort().reverse()
+  const currentMonth = months[0]
+  const previousMonth = months[1]
+
+  const currentIncome = currentMonth ? monthlyTotals[currentMonth].income : 0
+  const previousIncome = previousMonth ? monthlyTotals[previousMonth].income : 0
+  const incomeChange = calculatePercentageChange(currentIncome, previousIncome)
+
+  const currentExpense = currentMonth ? monthlyTotals[currentMonth].expense : 0
+  const previousExpense = previousMonth ? monthlyTotals[previousMonth].expense : 0
+  const expenseChange = calculatePercentageChange(currentExpense, previousExpense)
+
+  const currentBalance = currentIncome - currentExpense
+  const previousBalance = previousIncome - previousExpense
+  const balanceChange = calculatePercentageChange(currentBalance, previousBalance)
+
+  const latest = transactions?.slice(0, 5) || []
 
   const stats = [
-    { 
-      title: 'Total Balance',   
-      value: `Rp${totalBalance.toLocaleString('id-ID')}`,   
-      change: '+12.5%', 
-      icon: WalletCards,   
-      tone: 'green',
-      navigateTo: 'Transactions'  // Total Balance ke Transactions
-    },
-    { 
-      title: 'Monthly Income',  
-      value: `Rp${monthlyIncome.toLocaleString('id-ID')}`,  
-      change: '+8.1%',  
-      icon: TrendingUp,    
-      tone: 'green',
-      navigateTo: 'Analytics'     // Monthly Income ke Analytics
-    },
-    { 
-      title: 'Monthly Expense', 
-      value: `Rp${monthlyExpense.toLocaleString('id-ID')}`, 
-      change: '-2.4%',  
-      icon: ArrowDownRight, 
-      tone: 'red',
-      navigateTo: 'Analytics'     // Monthly Expense ke Analytics
-    },
+    { title: 'Total Balance', value: `Rp${totalBalance.toLocaleString('id-ID')}`, change: formatPercent(balanceChange), icon: WalletCards, tone: balanceChange >= 0 ? 'green' : 'red', navigateTo: 'Transactions' },
+    { title: 'Monthly Income', value: `Rp${currentIncome.toLocaleString('id-ID')}`, change: formatPercent(incomeChange), icon: TrendingUp, tone: incomeChange >= 0 ? 'green' : 'red', navigateTo: 'Analytics' },
+    { title: 'Monthly Expense', value: `Rp${currentExpense.toLocaleString('id-ID')}`, change: formatPercent(expenseChange), icon: ArrowDownRight, tone: expenseChange <= 0 ? 'green' : 'red', navigateTo: 'Analytics' },
   ]
+
+  const handleAdd = async (newTransaction) => {
+    await addTransaction(newTransaction)
+  }
+
+  const handleEditGoal = () => {
+    setIsEditGoalOpen(true)
+  }
+
+  const handleSaveGoal = ({ target, name }) => {
+    updateSavingsGoal(target, name)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <>
-      {/* ── Hero Section ── */}
+      {/* ─── Hero Section ────────────────────────────────────────── */}
       <section className="bg-surface rounded-2xl p-8">
         <p className="text-xs font-black uppercase tracking-widest text-primary mb-3">Financial Overview</p>
         <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-3">
@@ -136,27 +269,47 @@ export default function DashboardPage({ transactions = [], onAddTransaction, onN
         </div>
       </section>
 
-      {/* ── Feature Grid: Balance + Savings ── */}
+      {/* ─── Feature Grid: Available Balance + Savings Goal ────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Balance card */}
+        
+        {/* Available Balance Card */}
         <Card tone="green">
           <p className="text-xs font-black uppercase tracking-widest text-positive mb-2">Available Balance</p>
-          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">Rp{totalBalance.toLocaleString('id-ID')}</h2>
-          <Badge tone="green">+18.2% this month</Badge>
+          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">
+            Rp{totalBalance.toLocaleString('id-ID')}
+          </h2>
+          <Badge tone="green">+{savingsPercentage}% toward goal</Badge>
         </Card>
 
-        {/* Savings goal card */}
+        {/* Savings Goal Card */}
         <Card tone="sage">
-          <p className="text-xs font-black uppercase tracking-widest text-mute mb-2">Savings Goal</p>
-          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">72%</h2>
-          <div className="h-2 rounded-full bg-ink/10 overflow-hidden mb-3">
-            <div className="h-full rounded-full bg-positive transition-all" style={{ width: '72%' }} />
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-black uppercase tracking-widest text-mute">Savings Goal</p>
+            <button 
+              onClick={handleEditGoal}
+              className="text-xs text-positive hover:underline font-semibold"
+            >
+              Edit Goal
+            </button>
           </div>
-          <p className="text-sm text-body">You are on track to reach your emergency fund target.</p>
+          <h2 className="text-4xl font-black tracking-tight text-ink mb-3">
+            {savingsPercentage}%
+          </h2>
+          <div className="h-2 rounded-full bg-ink/10 overflow-hidden mb-3">
+            <div 
+              className="h-full rounded-full bg-positive transition-all" 
+              style={{ width: `${savingsPercentage}%` }} 
+            />
+          </div>
+          <p className="text-sm text-body">
+            {savingsPercentage >= 100 
+              ? `🎉 Goal achieved! You've reached Rp${totalBalance.toLocaleString('id-ID')} of Rp${savingsTarget.toLocaleString('id-ID')}`
+              : `Rp${totalBalance.toLocaleString('id-ID')} of Rp${savingsTarget.toLocaleString('id-ID')} saved`}
+          </p>
         </Card>
       </div>
 
-      {/* ── Stats Grid dengan Panah navigasi ── */}
+      {/* ─── Stats Grid ────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map(item => (
           <Card key={item.title}>
@@ -166,7 +319,6 @@ export default function DashboardPage({ transactions = [], onAddTransaction, onN
                 <p className="text-xs text-mute font-semibold">{item.title}</p>
                 <p className="text-lg font-black tracking-tight text-ink truncate">{item.value}</p>
               </div>
-              {/* Panah kanan dengan navigasi */}
               <RoundIconButton onClick={() => onNavigate?.(item.navigateTo)} />
             </div>
             <Badge tone={item.tone === 'red' ? 'red' : 'green'}>{item.change}</Badge>
@@ -174,17 +326,14 @@ export default function DashboardPage({ transactions = [], onAddTransaction, onN
         ))}
       </div>
 
-      {/* ── Transaction Table ── */}
+      {/* ─── Transaction Table ──────────────────────────────────────── */}
       <Card>
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-black tracking-tight text-ink">Latest Transactions</h2>
             <p className="text-sm text-mute">Your recent financial activity.</p>
           </div>
-          <button
-            onClick={() => onNavigate?.('Transactions')}
-            className="text-sm font-semibold text-positive hover:underline flex items-center gap-1"
-          >
+          <button onClick={() => onNavigate?.('Transactions')} className="text-sm font-semibold text-positive hover:underline flex items-center gap-1">
             View all <ArrowRight size={14} />
           </button>
         </div>
@@ -211,9 +360,7 @@ export default function DashboardPage({ transactions = [], onAddTransaction, onN
                       </div>
                     </div>
                   </td>
-                  <td className="py-3.5 pr-4">
-                    <Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge>
-                  </td>
+                  <td className="py-3.5 pr-4"><Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge></td>
                   <td className="py-3.5 pr-4 text-sm text-body">{t.formattedDate}</td>
                   <td className={`py-3.5 text-right text-sm font-semibold ${t.positive ? 'text-positive' : 'text-ink'}`}>
                     {t.formattedAmount}
@@ -228,8 +375,17 @@ export default function DashboardPage({ transactions = [], onAddTransaction, onN
         </div>
       </Card>
 
-      {/* ── Modal ── */}
-      <AddTransactionModal isOpen={showModal} onClose={() => setShowModal(false)} onAdd={onAddTransaction} />
+      {/* ─── Add Transaction Modal ──────────────────────────────────── */}
+      <AddTransactionModal isOpen={showModal} onClose={() => setShowModal(false)} onAdd={handleAdd} />
+
+      {/* ─── Edit Savings Goal Modal ────────────────────────────────── */}
+      <EditGoalModal 
+        isOpen={isEditGoalOpen}
+        onClose={() => setIsEditGoalOpen(false)}
+        onSave={handleSaveGoal}
+        currentTarget={savingsTarget}
+        currentName={savingsName}
+      />
     </>
   )
 }

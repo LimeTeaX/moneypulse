@@ -1,7 +1,10 @@
 // src/pages/Transactions.jsx
-// Full Tailwind refactor — preserves all logic (add, delete, filter, search, export)
+// ─────────────────────────────────────────────
+// Transactions Page — Full CRUD with Supabase
+// Filter, search, export CSV, delete transaction
+// ─────────────────────────────────────────────
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ArrowDownRight, ArrowUpRight, BarChart3,
   ChevronRight, Filter, Plus, Search, TrendingDown, TrendingUp, X, Download
@@ -10,54 +13,43 @@ import {
   ActionButton, Badge, Card, IconTile, MetricCard,
   Modal, FormGroup, Input, Select
 } from '../components/common'
+import { useTransactions } from '../hooks/useTransactions'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
-// ─── Helpers ──────────────────────────────────
-function filterTransactions(list, { dateRange, type, category }) {
-  return list.filter(t => {
-    const now = new Date()
-    if (dateRange === 'today') { if (t.date !== now.toISOString().split('T')[0]) return false }
-    else if (dateRange === 'week') { const d = new Date(t.date); const diff = (now - d) / 86400000; if (diff > 7) return false }
-    else if (dateRange === 'month') { const d = new Date(t.date); if (d.getMonth() !== now.getMonth()) return false }
-    else if (dateRange === 'year') { const d = new Date(t.date); if (d.getFullYear() !== now.getFullYear()) return false }
-    if (type === 'income' && !t.positive) return false
-    if (type === 'expense' && t.positive) return false
-    if (category !== 'all' && t.category !== category) return false
-    return true
-  })
-}
-
-function searchTransactions(list, term) {
-  if (!term) return list
-  const q = term.toLowerCase()
-  return list.filter(t => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || t.detail.toLowerCase().includes(q))
-}
-
-// ─── Add Transaction Modal ────────────────────
+// ─────────────────────────────────────────────
+// Add Transaction Modal
+// ─────────────────────────────────────────────
 function AddTransactionModal({ isOpen, onClose, onAdd }) {
-  const [formName, setFormName]         = useState('')
-  const [formAmount, setFormAmount]     = useState('')
-  const [formType, setFormType]         = useState('expense')
+  const [formName, setFormName] = useState('')
+  const [formAmount, setFormAmount] = useState('')
+  const [formType, setFormType] = useState('expense')
   const [formCategory, setFormCategory] = useState('')
-  const [formDetail, setFormDetail]     = useState('')
+  const [formDetail, setFormDetail] = useState('')
 
   const categories = {
-    expense: ['Food & Drink','Shopping','Entertainment','Bills','Transport','Healthcare','Other'],
-    income:  ['Salary','Freelance','Investment','Gift','Other'],
+    expense: ['Food & Drink', 'Shopping', 'Entertainment', 'Bills', 'Transport', 'Healthcare', 'Other'],
+    income: ['Salary', 'Freelance', 'Investment', 'Gift', 'Other']
   }
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formName || !formAmount) return alert('Please fill in name and amount')
+    if (!formName || !formAmount) {
+      alert('Please fill in name and amount')
+      return
+    }
     const amountNum = parseFloat(formAmount)
-    if (isNaN(amountNum) || amountNum <= 0) return alert('Please enter a valid amount')
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('Please enter a valid amount')
+      return
+    }
     const finalAmount = formType === 'expense' ? -Math.abs(amountNum) : Math.abs(amountNum)
     onAdd({
-      id: Date.now(), name: formName, detail: formDetail || '',
+      name: formName,
+      detail: formDetail || '',
       category: formCategory || (formType === 'income' ? 'Salary' : 'Other'),
       date: new Date().toISOString().split('T')[0],
-      formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       amount: finalAmount,
-      formattedAmount: `${finalAmount > 0 ? '+' : '-'}Rp${Math.abs(finalAmount).toLocaleString('id-ID')}`,
       positive: finalAmount > 0,
     })
     onClose()
@@ -95,19 +87,26 @@ function AddTransactionModal({ isOpen, onClose, onAdd }) {
           <Input value={formDetail} onChange={e => setFormDetail(e.target.value)} placeholder="Additional notes..." />
         </FormGroup>
         <div className="flex gap-3 mt-6">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Cancel</button>
-          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">Add Transaction</button>
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Add Transaction</button>
         </div>
       </form>
     </Modal>
   )
 }
 
-// ─── Filter Modal ─────────────────────────────
+// ─────────────────────────────────────────────
+// Filter Modal
+// ─────────────────────────────────────────────
 function FilterModal({ isOpen, onClose, filters, onApply }) {
   const [local, setLocal] = useState(filters)
-  if (!isOpen) return null
+
+  useEffect(() => {
+    setLocal(filters)
+  }, [filters, isOpen])
+
   const reset = { dateRange: 'all', type: 'all', category: 'all' }
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Filter Transactions">
       <FormGroup label="Date Range">
@@ -129,114 +128,169 @@ function FilterModal({ isOpen, onClose, filters, onApply }) {
       <FormGroup label="Category">
         <Select value={local.category} onChange={e => setLocal({ ...local, category: e.target.value })}>
           <option value="all">All Categories</option>
-          {['Food & Drink','Shopping','Entertainment','Bills','Transport','Income'].map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
+          <option value="Food & Drink">Food & Drink</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Bills">Bills</option>
+          <option value="Transport">Transport</option>
+          <option value="Income">Income</option>
         </Select>
       </FormGroup>
       <div className="flex gap-3 mt-6">
         <button type="button" onClick={() => { setLocal(reset); onApply(reset); onClose() }}
-          className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">
-          Reset
-        </button>
+          className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Reset</button>
         <button type="button" onClick={() => { onApply(local); onClose() }}
-          className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">
-          Apply Filters
-        </button>
+          className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Apply Filters</button>
       </div>
     </Modal>
   )
 }
 
-// ─── Transaction Detail Modal ─────────────────
-function TransactionDetailModal({ isOpen, onClose, transaction: t, onDelete }) {
-  if (!isOpen || !t) return null
+// ─────────────────────────────────────────────
+// Transaction Detail Modal
+// ─────────────────────────────────────────────
+function TransactionDetailModal({ isOpen, onClose, transaction, onDelete }) {
+  if (!isOpen || !transaction) return null
+
   const handleDelete = () => {
-    if (confirm(`Delete "${t.name}"?`)) { onDelete(t.id); onClose() }
+    if (confirm(`Delete "${transaction.name}"?`)) {
+      onDelete(transaction.id)
+      onClose()
+    }
   }
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Transaction Details">
       <div className="flex items-center gap-4 mb-6 pb-6 border-b border-ink/5">
-        <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'red'} size={28} />
+        <IconTile icon={transaction.positive ? ArrowUpRight : ArrowDownRight} tone={transaction.positive ? 'green' : 'red'} size={28} />
         <div>
-          <h3 className="text-lg font-black text-ink">{t.name}</h3>
-          <p className="text-sm text-mute">{t.detail}</p>
+          <h3 className="text-lg font-black text-ink">{transaction.name}</h3>
+          <p className="text-sm text-mute">{transaction.detail || 'No description'}</p>
         </div>
       </div>
       <div className="space-y-3 mb-6">
-        {[
-          ['Amount', <span className={`font-semibold ${t.positive ? 'text-positive' : 'text-danger'}`}>{t.formattedAmount}</span>],
-          ['Category', <Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge>],
-          ['Date', t.formattedDate],
-        ].map(([label, val]) => (
-          <div key={label} className="flex items-center justify-between">
-            <span className="text-sm text-mute">{label}</span>
-            <span className="text-sm text-ink">{val}</span>
-          </div>
-        ))}
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-mute">Amount:</span>
+          <span className={`text-sm font-semibold ${transaction.positive ? 'text-positive' : 'text-danger'}`}>{transaction.formattedAmount}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-mute">Category:</span>
+          <Badge tone={transaction.positive ? 'green' : 'gray'}>{transaction.category}</Badge>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-mute">Date:</span>
+          <span className="text-sm text-ink">{transaction.formattedDate}</span>
+        </div>
       </div>
       <div className="flex gap-3">
-        <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Close</button>
+        <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Close</button>
         <button onClick={handleDelete} className="flex-1 py-3 rounded-xl bg-red-50 text-danger text-sm font-semibold hover:bg-red-100 transition-colors">Delete</button>
       </div>
     </Modal>
   )
 }
 
-// ─── Main Transactions Page ───────────────────
-const INITIAL = [
-  { id: 1, name: 'Freelance Payment', detail: 'Payment received', category: 'Income', date: '2024-05-20', formattedDate: 'May 20, 2024', amount: 2500000, formattedAmount: '+Rp2.500.000', positive: true },
-  { id: 2, name: 'Spotify Premium', detail: 'Monthly subscription', category: 'Entertainment', date: '2024-05-20', formattedDate: 'May 20, 2024', amount: -59000, formattedAmount: '-Rp59.000', positive: false },
-  { id: 3, name: 'Coffee Shop', detail: 'Food & Drink', category: 'Food & Drink', date: '2024-05-19', formattedDate: 'May 19, 2024', amount: -45000, formattedAmount: '-Rp45.000', positive: false },
-  { id: 4, name: 'Groceries', detail: 'Supermarket', category: 'Shopping', date: '2024-05-18', formattedDate: 'May 18, 2024', amount: -230000, formattedAmount: '-Rp230.000', positive: false },
-  { id: 5, name: 'SeaBank Interest', detail: 'Interest received', category: 'Income', date: '2024-05-18', formattedDate: 'May 18, 2024', amount: 12450, formattedAmount: '+Rp12.450', positive: true },
-  { id: 6, name: 'Electricity Bill', detail: 'PLN', category: 'Bills', date: '2024-05-15', formattedDate: 'May 15, 2024', amount: -450000, formattedAmount: '-Rp450.000', positive: false },
-  { id: 7, name: 'Internet Bill', detail: 'Indihome', category: 'Bills', date: '2024-05-12', formattedDate: 'May 12, 2024', amount: -280000, formattedAmount: '-Rp280.000', positive: false },
-  { id: 8, name: 'Netflix', detail: 'Subscription', category: 'Entertainment', date: '2024-05-10', formattedDate: 'May 10, 2024', amount: -149000, formattedAmount: '-Rp149.000', positive: false },
-]
+// ─────────────────────────────────────────────
+// Helper functions
+// ─────────────────────────────────────────────
+const filterTransactions = (list, { dateRange, type, category }) => {
+  return list.filter(t => {
+    const now = new Date()
+    const tDate = new Date(t.date)
+    const diffDays = Math.floor((now - tDate) / (1000 * 60 * 60 * 24))
+    
+    if (dateRange === 'today' && diffDays > 0) return false
+    if (dateRange === 'week' && diffDays > 7) return false
+    if (dateRange === 'month' && diffDays > 30) return false
+    if (dateRange === 'year' && diffDays > 365) return false
+    
+    if (type === 'income' && !t.positive) return false
+    if (type === 'expense' && t.positive) return false
+    
+    if (category !== 'all' && t.category !== category) return false
+    
+    return true
+  })
+}
 
-export default function TransactionsPage({ transactions: sharedTx, onAddTransaction, onDeleteTransaction }) {
-  const [localTransactions, setLocalTransactions] = useState(sharedTx?.length ? sharedTx : INITIAL)
-  const [searchTerm, setSearchTerm]               = useState('')
-  const [isAddOpen, setIsAddOpen]                 = useState(false)
-  const [isFilterOpen, setIsFilterOpen]           = useState(false)
-  const [selectedTx, setSelectedTx]               = useState(null)
-  const [filters, setFilters]                     = useState({ dateRange: 'all', type: 'all', category: 'all' })
+const searchTransactions = (list, term) => {
+  if (!term) return list
+  const q = term.toLowerCase()
+  return list.filter(t => 
+    t.name.toLowerCase().includes(q) || 
+    t.category.toLowerCase().includes(q) || 
+    (t.detail && t.detail.toLowerCase().includes(q))
+  )
+}
 
-  const filtered  = filterTransactions(localTransactions, filters)
+// ─────────────────────────────────────────────
+// Main Transactions Page
+// ─────────────────────────────────────────────
+export default function TransactionsPage({ onNavigate }) {
+  const { user } = useAuth()
+  const { transactions, addTransaction, deleteTransaction, fetchTransactions, loading } = useTransactions()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [selectedTx, setSelectedTx] = useState(null)
+  const [filters, setFilters] = useState({ dateRange: 'all', type: 'all', category: 'all' })
+
+  // Format transactions for display
+  const formattedTransactions = transactions.map(t => ({
+    ...t,
+    formattedDate: new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    formattedAmount: `${t.positive ? '+' : '-'}Rp${Math.abs(t.amount).toLocaleString('id-ID')}`
+  }))
+
+  const filtered = filterTransactions(formattedTransactions, filters)
   const displayed = searchTransactions(filtered, searchTerm)
 
-  const totalIncome  = localTransactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
-  const totalExpense = Math.abs(localTransactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
-  const savingsRate  = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
+  const totalIncome = transactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
+  const totalExpense = Math.abs(transactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
+  const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
 
-  const handleAdd = (t) => {
-    setLocalTransactions(prev => [t, ...prev])
-    onAddTransaction?.(t)
+  const handleAdd = async (newTransaction) => {
+    await addTransaction(newTransaction)
+    await fetchTransactions()
   }
-  const handleDelete = (id) => {
-    setLocalTransactions(prev => prev.filter(t => t.id !== id))
-    onDeleteTransaction?.(id)
+
+  const handleDelete = async (id) => {
+    await deleteTransaction(id)
+    await fetchTransactions()
   }
+
   const handleExport = () => {
     const csv = [
-      ['Name','Category','Date','Amount'],
+      ['Name', 'Category', 'Date', 'Amount'],
       ...displayed.map(t => [t.name, t.category, t.formattedDate, t.formattedAmount])
-    ].map(r => r.join(',')).join('\n')
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })), download: `transactions_${new Date().toISOString().split('T')[0]}.csv` })
+    ].map(row => row.join(',')).join('\n')
+    
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transactions_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
+    URL.revokeObjectURL(url)
   }
 
-  // Active filter badges
   const hasFilter = filters.dateRange !== 'all' || filters.type !== 'all' || filters.category !== 'all'
   const filterLabels = {
     today: 'Today', week: 'This Week', month: 'This Month', year: 'This Year',
     income: 'Income Only', expense: 'Expense Only',
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <>
-      {/* ── Page Header ── */}
+      {/* Page Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-primary mb-2">Transaction History</p>
@@ -246,11 +300,10 @@ export default function TransactionsPage({ transactions: sharedTx, onAddTransact
         <ActionButton icon={Plus} onClick={() => setIsAddOpen(true)}>Add Transaction</ActionButton>
       </div>
 
-      {/* ── Metric Cards ── */}
+      {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <MetricCard icon={TrendingUp} title="Total Income" value={`Rp${totalIncome.toLocaleString('id-ID')}`} change="+8.1%" note="this month" />
         <MetricCard icon={TrendingDown} title="Total Expenses" value={`Rp${totalExpense.toLocaleString('id-ID')}`} change="-2.4%" note="this month" tone="red" />
-        {/* Savings rate card */}
         <Card>
           <div className="flex items-start justify-between mb-3">
             <div>
@@ -266,10 +319,9 @@ export default function TransactionsPage({ transactions: sharedTx, onAddTransact
         </Card>
       </div>
 
-      {/* ── Toolbar ── */}
+      {/* Toolbar */}
       <div className="flex gap-3 flex-wrap items-center">
-        {/* Search */}
-        <div className="flex items-center gap-2 flex-1 min-w-[200px] bg-surface rounded-xl px-4 py-3 border border-ink/10">
+        <div className="flex items-center gap-2 flex-1 min-w-50 bg-surface rounded-xl px-4 py-3 border border-ink/10">
           <Search size={18} className="text-mute shrink-0" />
           <input
             type="text"
@@ -288,20 +340,18 @@ export default function TransactionsPage({ transactions: sharedTx, onAddTransact
         <ActionButton icon={Download} variant="outline" onClick={handleExport}>Export</ActionButton>
       </div>
 
-      {/* ── Active Filter Badges ── */}
+      {/* Active Filter Badges */}
       {hasFilter && (
         <div className="flex gap-2 flex-wrap">
           {filters.dateRange !== 'all' && <Badge tone="blue">{filterLabels[filters.dateRange]}</Badge>}
           {filters.type !== 'all' && <Badge tone={filters.type === 'income' ? 'green' : 'red'}>{filterLabels[filters.type]}</Badge>}
           {filters.category !== 'all' && <Badge tone="orange">{filters.category}</Badge>}
           <button onClick={() => setFilters({ dateRange: 'all', type: 'all', category: 'all' })}
-            className="text-xs text-mute hover:text-ink underline">
-            Clear all
-          </button>
+            className="text-xs text-mute hover:text-ink underline">Clear all</button>
         </div>
       )}
 
-      {/* ── Transaction Table ── */}
+      {/* Transaction Table */}
       <Card>
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -310,13 +360,15 @@ export default function TransactionsPage({ transactions: sharedTx, onAddTransact
           </div>
         </div>
         <div className="overflow-x-auto -mx-2 px-2">
-          <table className="w-full min-w-[560px]">
+          <table className="w-full min-w-140">
             <thead>
               <tr className="border-b border-ink/5">
-                {['Transaction','Category','Date','Amount',''].map((h, i) => (
-                  <th key={i} className={`text-xs font-black uppercase tracking-wider text-mute pb-3 ${i === 3 ? 'text-right' : 'text-left'}`}>{h}</th>
-                ))}
-              </tr>
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Transaction</th>
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Category</th>
+                <th className="text-left text-xs font-black uppercase tracking-wider text-mute pb-3">Date</th>
+                <th className="text-right text-xs font-black uppercase tracking-wider text-mute pb-3">Amount</th>
+                <th className="w-8"></th>
+               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
               {displayed.map(t => (
@@ -337,14 +389,16 @@ export default function TransactionsPage({ transactions: sharedTx, onAddTransact
                 </tr>
               ))}
               {displayed.length === 0 && (
-                <tr><td colSpan={5} className="text-center py-16 text-mute text-sm">No transactions found</td></tr>
+                <tr>
+                  <td colSpan={5} className="text-center py-16 text-mute text-sm">No transactions found</td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* ── Modals ── */}
+      {/* Modals */}
       <AddTransactionModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onAdd={handleAdd} />
       <FilterModal isOpen={isFilterOpen} onClose={() => setIsFilterOpen(false)} filters={filters} onApply={setFilters} />
       <TransactionDetailModal isOpen={!!selectedTx} onClose={() => setSelectedTx(null)} transaction={selectedTx} onDelete={handleDelete} />

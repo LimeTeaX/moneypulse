@@ -1,7 +1,7 @@
 // src/pages/Recurring.jsx
 // ─────────────────────────────────────────────
-// Recurring payments — full fungsi (add, edit, delete, toggle, filter, search, filter modal, review modal)
-// Siap konek ke Supabase nanti
+// Recurring payments — Full CRUD with Supabase
+// Add, edit, delete, toggle status, filter, search, review modal
 // ─────────────────────────────────────────────
 
 import { useState, useEffect } from 'react'
@@ -11,6 +11,8 @@ import {
   ChevronRight, AlertCircle, Eye
 } from 'lucide-react'
 import { ActionButton, Badge, Card, IconTile, Modal, FormGroup, Input, Select } from '../components/common'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../contexts/AuthContext'
 
 // ─────────────────────────────────────────────
 // Constants
@@ -18,18 +20,6 @@ import { ActionButton, Badge, Card, IconTile, Modal, FormGroup, Input, Select } 
 const CATEGORY_FILTERS = ['All', 'Subscriptions', 'Bills', 'Loans', 'Insurance']
 const FREQUENCY_OPTIONS = ['Monthly', 'Weekly', 'Yearly', 'One-time']
 const CATEGORY_OPTIONS = ['Subscription', 'Bill', 'Loan', 'Insurance']
-
-// ─────────────────────────────────────────────
-// Initial data (nanti diganti dengan fetch dari Supabase)
-// ─────────────────────────────────────────────
-const INITIAL_RECURRING = [
-  { id: '1', name: 'Spotify Premium', description: 'Music streaming', category: 'Subscription', amount: 59000, frequency: 'Monthly', nextPayment: '2024-06-02', status: 'active', icon: '🎵', userId: 'user_1' },
-  { id: '2', name: 'Netflix', description: 'Video streaming', category: 'Subscription', amount: 149000, frequency: 'Monthly', nextPayment: '2024-06-05', status: 'active', icon: '🎬', userId: 'user_1' },
-  { id: '3', name: 'PLN Electricity', description: 'Utilities', category: 'Bill', amount: 450000, frequency: 'Monthly', nextPayment: '2024-06-10', status: 'active', icon: '⚡', userId: 'user_1' },
-  { id: '4', name: 'Internet (Indihome)', description: 'Internet service', category: 'Bill', amount: 280000, frequency: 'Monthly', nextPayment: '2024-06-12', status: 'active', icon: '🌐', userId: 'user_1' },
-  { id: '5', name: 'Adobe Creative Cloud', description: 'Design tools', category: 'Subscription', amount: 239000, frequency: 'Monthly', nextPayment: '2024-06-15', status: 'active', icon: '🎨', userId: 'user_1' },
-  { id: '6', name: 'Tokopedia Premium', description: 'E-commerce', category: 'Subscription', amount: 68000, frequency: 'Monthly', nextPayment: '2024-06-20', status: 'inactive', icon: '🛒', userId: 'user_1' },
-]
 
 // ─────────────────────────────────────────────
 // Helper functions
@@ -52,22 +42,26 @@ const getCategoryTone = (category) => {
 function RecurringFormModal({ isOpen, onClose, onSave, editingItem }) {
   const [formData, setFormData] = useState({
     name: '', description: '', category: 'Subscription', amount: '',
-    frequency: 'Monthly', nextPayment: new Date().toISOString().split('T')[0],
+    frequency: 'Monthly', next_payment: new Date().toISOString().split('T')[0],
     status: 'active', icon: '📋'
   })
 
   useEffect(() => {
     if (editingItem) {
       setFormData({
-        name: editingItem.name, description: editingItem.description,
-        category: editingItem.category, amount: editingItem.amount.toString(),
-        frequency: editingItem.frequency, nextPayment: editingItem.nextPayment,
-        status: editingItem.status, icon: editingItem.icon
+        name: editingItem.name || '',
+        description: editingItem.description || '',
+        category: editingItem.category || 'Subscription',
+        amount: editingItem.amount?.toString() || '',
+        frequency: editingItem.frequency || 'Monthly',
+        next_payment: editingItem.next_payment || new Date().toISOString().split('T')[0],
+        status: editingItem.status || 'active',
+        icon: editingItem.icon || '📋'
       })
     } else {
       setFormData({
         name: '', description: '', category: 'Subscription', amount: '',
-        frequency: 'Monthly', nextPayment: new Date().toISOString().split('T')[0],
+        frequency: 'Monthly', next_payment: new Date().toISOString().split('T')[0],
         status: 'active', icon: '📋'
       })
     }
@@ -75,46 +69,66 @@ function RecurringFormModal({ isOpen, onClose, onSave, editingItem }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.amount) return alert('Please fill in name and amount')
-    const newItem = {
-      id: editingItem?.id || Date.now().toString(),
-      name: formData.name, description: formData.description, category: formData.category,
-      amount: parseFloat(formData.amount), frequency: formData.frequency,
-      nextPayment: formData.nextPayment, status: formData.status, icon: formData.icon || '📋',
-      userId: 'user_1'
+    if (!formData.name || !formData.amount) {
+      alert('Please fill in name and amount')
+      return
     }
-    onSave(newItem)
+    onSave({
+      id: editingItem?.id,
+      name: formData.name,
+      description: formData.description,
+      category: formData.category,
+      amount: parseFloat(formData.amount),
+      frequency: formData.frequency,
+      next_payment: formData.next_payment,
+      status: formData.status,
+      icon: formData.icon || '📋'
+    })
     onClose()
   }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={editingItem ? 'Edit Recurring' : 'Add Recurring'}>
       <form onSubmit={handleSubmit}>
-        <FormGroup label="Name *"><Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g., Netflix, Spotify" /></FormGroup>
-        <FormGroup label="Description"><Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Additional details" /></FormGroup>
+        <FormGroup label="Name *">
+          <Input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g., Netflix, Spotify" />
+        </FormGroup>
+        <FormGroup label="Description">
+          <Input value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="Additional details" />
+        </FormGroup>
         <FormGroup label="Category">
           <Select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>
             {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
           </Select>
         </FormGroup>
-        <FormGroup label="Amount (IDR) *"><Input type="number" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0" /></FormGroup>
+        <FormGroup label="Amount (IDR) *">
+          <Input type="number" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0" />
+        </FormGroup>
         <FormGroup label="Frequency">
           <Select value={formData.frequency} onChange={e => setFormData({...formData, frequency: e.target.value})}>
             {FREQUENCY_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
           </Select>
         </FormGroup>
-        <FormGroup label="Next Payment Date"><Input type="date" value={formData.nextPayment} onChange={e => setFormData({...formData, nextPayment: e.target.value})} /></FormGroup>
+        <FormGroup label="Next Payment Date">
+          <Input type="date" value={formData.next_payment} onChange={e => setFormData({...formData, next_payment: e.target.value})} />
+        </FormGroup>
         <FormGroup label="Status">
           <div className="flex gap-3">
             <button type="button" onClick={() => setFormData({...formData, status: 'active'})}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${formData.status === 'active' ? 'bg-positive text-white' : 'bg-surface-soft text-mute'}`}>Active</button>
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${formData.status === 'active' ? 'bg-positive text-white' : 'bg-surface-soft text-mute'}`}>
+              Active
+            </button>
             <button type="button" onClick={() => setFormData({...formData, status: 'inactive'})}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${formData.status === 'inactive' ? 'bg-danger text-white' : 'bg-surface-soft text-mute'}`}>Inactive</button>
+              className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-colors ${formData.status === 'inactive' ? 'bg-danger text-white' : 'bg-surface-soft text-mute'}`}>
+              Inactive
+            </button>
           </div>
         </FormGroup>
         <div className="flex gap-3 mt-6">
-          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Cancel</button>
-          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">{editingItem ? 'Save Changes' : 'Add Recurring'}</button>
+          <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button type="submit" className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">
+            {editingItem ? 'Save Changes' : 'Add Recurring'}
+          </button>
         </div>
       </form>
     </Modal>
@@ -128,12 +142,14 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, itemName }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Delete Recurring">
       <div className="text-center">
-        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4"><Trash2 size={28} className="text-danger" /></div>
+        <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+          <Trash2 size={28} className="text-danger" />
+        </div>
         <p className="text-ink font-semibold mb-2">Delete "{itemName}"?</p>
         <p className="text-mute text-sm mb-6">This action cannot be undone.</p>
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-danger text-white text-sm font-semibold hover:bg-danger/90 transition-colors">Delete</button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 py-3 rounded-xl bg-danger text-white text-sm font-semibold hover:bg-danger/90">Delete</button>
         </div>
       </div>
     </Modal>
@@ -141,7 +157,7 @@ function DeleteConfirmModal({ isOpen, onClose, onConfirm, itemName }) {
 }
 
 // ─────────────────────────────────────────────
-// Modal: Filter (yang di samping search bar)
+// Modal: Filter
 // ─────────────────────────────────────────────
 function FilterModal({ isOpen, onClose, filterCategory, setFilterCategory, filterStatus, setFilterStatus, onReset }) {
   return (
@@ -160,8 +176,8 @@ function FilterModal({ isOpen, onClose, filterCategory, setFilterCategory, filte
         </Select>
       </FormGroup>
       <div className="flex gap-3 mt-6">
-        <button onClick={onReset} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft transition-colors">Reset</button>
-        <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">Apply</button>
+        <button onClick={onReset} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Reset</button>
+        <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Apply</button>
       </div>
     </Modal>
   )
@@ -176,14 +192,12 @@ function ReviewModal({ isOpen, onClose, items, onUnsubscribe }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Review Subscriptions">
       <div className="space-y-4">
-        {/* Summary */}
         <div className="bg-primary-pale rounded-xl p-4 text-center">
           <p className="text-sm text-mute mb-1">Potential monthly savings</p>
           <p className="text-2xl font-black text-positive">{formatCurrency(totalPotential)}</p>
           <p className="text-xs text-mute mt-1">from {items.length} subscription(s)</p>
         </div>
         
-        {/* List of subscriptions to review */}
         <div className="space-y-2 max-h-[50vh] overflow-y-auto">
           {items.length === 0 ? (
             <p className="text-center text-mute py-8">No subscriptions to review</p>
@@ -215,9 +229,7 @@ function ReviewModal({ isOpen, onClose, items, onUnsubscribe }) {
         </div>
         
         <div className="flex gap-3 pt-4 border-t border-ink/10">
-          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors">
-            Close
-          </button>
+          <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Close</button>
         </div>
       </div>
     </Modal>
@@ -228,8 +240,9 @@ function ReviewModal({ isOpen, onClose, items, onUnsubscribe }) {
 // Main Recurring Page
 // ─────────────────────────────────────────────
 export default function RecurringPage() {
-  // ─── State ─────────────────────────────────
-  const [items, setItems] = useState(INITIAL_RECURRING)
+  const { user } = useAuth()
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('All')
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('all')
@@ -243,21 +256,42 @@ export default function RecurringPage() {
   const [actionMenuOpen, setActionMenuOpen] = useState(null)
   const [reviewItems, setReviewItems] = useState([])
 
-  // ─── Statistics from real data ─────────────
+  // ─── Fetch recurring from Supabase ───
+  const fetchRecurring = async () => {
+    if (!user) return
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('recurring')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Error fetching recurring:', error)
+    } else {
+      setItems(data || [])
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchRecurring()
+  }, [user])
+
+  // ─── Statistics from real data ───
   const activeItems = items.filter(i => i.status === 'active')
   const totalMonthly = activeItems.reduce((s, i) => s + i.amount, 0)
   const activeCount = activeItems.length
   const dueCount = activeItems.filter(i => {
-    const nextDate = new Date(i.nextPayment)
+    const nextDate = new Date(i.next_payment)
     const today = new Date()
     const diffDays = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24))
     return diffDays <= 7 && diffDays >= 0
   }).length
   const annualAmount = totalMonthly * 12
 
-  // ─── Filter logic (semua filter berfungsi) ─
+  // ─── Filter logic ───
   const filteredItems = items.filter(item => {
-    // 1. Filter by tab (All, Subscriptions, Bills, Loans, Insurance)
     if (activeFilter !== 'All') {
       if (activeFilter === 'Subscriptions' && item.category !== 'Subscription') return false
       if (activeFilter === 'Bills' && item.category !== 'Bill') return false
@@ -265,24 +299,19 @@ export default function RecurringPage() {
       if (activeFilter === 'Insurance' && item.category !== 'Insurance') return false
     }
     
-    // 2. Filter by search (name or description)
     if (search.trim() !== '') {
       const searchLower = search.toLowerCase()
       const matchName = item.name.toLowerCase().includes(searchLower)
-      const matchDesc = item.description.toLowerCase().includes(searchLower)
+      const matchDesc = item.description?.toLowerCase().includes(searchLower)
       if (!matchName && !matchDesc) return false
     }
     
-    // 3. Filter by category (dari modal filter)
     if (filterCategory !== 'all' && item.category !== filterCategory) return false
-    
-    // 4. Filter by status (dari modal filter)
     if (filterStatus !== 'all' && item.status !== filterStatus) return false
     
     return true
   })
 
-  // ─── Reset semua filter ────────────────────
   const resetAllFilters = () => {
     setActiveFilter('All')
     setSearch('')
@@ -290,9 +319,103 @@ export default function RecurringPage() {
     setFilterStatus('all')
   }
 
-  // ─── Review Subscriptions ──────────────────
+  // ─── CRUD Operations ───
+  const handleAdd = async (newItem) => {
+    const { data, error } = await supabase
+      .from('recurring')
+      .insert([{ ...newItem, user_id: user.id }])
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Error adding recurring:', error)
+      alert('Failed to add recurring')
+    } else {
+      setItems([data, ...items])
+    }
+  }
+
+  const handleEdit = (item) => {
+    setEditingItem(item)
+    setIsAddModalOpen(true)
+  }
+
+  const handleSave = async (savedItem) => {
+    if (editingItem) {
+      const { error } = await supabase
+        .from('recurring')
+        .update({
+          name: savedItem.name,
+          description: savedItem.description,
+          category: savedItem.category,
+          amount: savedItem.amount,
+          frequency: savedItem.frequency,
+          next_payment: savedItem.next_payment,
+          status: savedItem.status,
+          icon: savedItem.icon
+        })
+        .eq('id', savedItem.id)
+        .eq('user_id', user.id)
+      
+      if (error) {
+        console.error('Error updating recurring:', error)
+        alert('Failed to update recurring')
+      } else {
+        setItems(items.map(i => i.id === savedItem.id ? { ...i, ...savedItem } : i))
+        setEditingItem(null)
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('recurring')
+        .insert([{ ...savedItem, user_id: user.id }])
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('Error adding recurring:', error)
+        alert('Failed to add recurring')
+      } else {
+        setItems([data, ...items])
+      }
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingItem) return
+    
+    const { error } = await supabase
+      .from('recurring')
+      .delete()
+      .eq('id', deletingItem.id)
+      .eq('user_id', user.id)
+    
+    if (error) {
+      console.error('Error deleting recurring:', error)
+      alert('Failed to delete recurring')
+    } else {
+      setItems(items.filter(i => i.id !== deletingItem.id))
+      setIsDeleteModalOpen(false)
+      setDeletingItem(null)
+    }
+  }
+
+  const handleToggleStatus = async (item) => {
+    const newStatus = item.status === 'active' ? 'inactive' : 'active'
+    const { error } = await supabase
+      .from('recurring')
+      .update({ status: newStatus })
+      .eq('id', item.id)
+      .eq('user_id', user.id)
+    
+    if (error) {
+      console.error('Error toggling status:', error)
+      alert('Failed to update status')
+    } else {
+      setItems(items.map(i => i.id === item.id ? { ...i, status: newStatus } : i))
+    }
+  }
+
   const handleReviewSubscriptions = () => {
-    // Filter items yang inactive atau biaya > 100rb
     const itemsToReview = items.filter(item => 
       item.status === 'inactive' || item.amount > 100000
     )
@@ -300,40 +423,34 @@ export default function RecurringPage() {
     setIsReviewModalOpen(true)
   }
 
-  const handleUnsubscribe = (id, name) => {
+  const handleUnsubscribe = async (id, name) => {
     if (confirm(`Unsubscribe from "${name}"? This will mark it as inactive.`)) {
-      setItems(items.map(item => 
-        item.id === id ? { ...item, status: 'inactive' } : item
-      ))
-      // Update review list
-      setReviewItems(reviewItems.filter(item => item.id !== id))
+      const { error } = await supabase
+        .from('recurring')
+        .update({ status: 'inactive' })
+        .eq('id', id)
+        .eq('user_id', user.id)
+      
+      if (error) {
+        console.error('Error unsubscribing:', error)
+        alert('Failed to unsubscribe')
+      } else {
+        setItems(items.map(item => 
+          item.id === id ? { ...item, status: 'inactive' } : item
+        ))
+        setReviewItems(reviewItems.filter(item => item.id !== id))
+      }
     }
   }
 
-  // ─── CRUD Operations ────────────────────────
-  const handleAdd = (newItem) => setItems([newItem, ...items])
-  const handleEdit = (item) => { setEditingItem(item); setIsAddModalOpen(true) }
-  const handleSave = (savedItem) => {
-    if (editingItem) {
-      setItems(items.map(i => i.id === savedItem.id ? savedItem : i))
-      setEditingItem(null)
-    } else {
-      setItems([savedItem, ...items])
-    }
-  }
-  const handleDelete = () => {
-    if (deletingItem) {
-      setItems(items.filter(i => i.id !== deletingItem.id))
-      setIsDeleteModalOpen(false)
-      setDeletingItem(null)
-    }
-  }
-  const handleToggleStatus = (item) => {
-    const newStatus = item.status === 'active' ? 'inactive' : 'active'
-    setItems(items.map(i => i.id === item.id ? { ...i, status: newStatus } : i))
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
-  // ─── Render ─────────────────────────────────
   return (
     <>
       {/* Header */}
@@ -348,15 +465,42 @@ export default function RecurringPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card><div className="flex items-start justify-between mb-2"><p className="text-xs text-mute font-semibold">Total Monthly Commitment</p><IconTile icon={RefreshCw} tone="green" size={16} /></div><p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p><Badge tone="green">-4.2% vs last month</Badge></Card>
-        <Card><div className="flex items-start justify-between mb-2"><p className="text-xs text-mute font-semibold">Active Subscriptions</p><IconTile icon={TrendingUp} tone="green" size={16} /></div><p className="text-xl font-black tracking-tight text-ink mb-1">{activeCount}</p><Badge tone="green">No change</Badge></Card>
-        <Card><div className="flex items-start justify-between mb-2"><p className="text-xs text-mute font-semibold">Due This Month</p><IconTile icon={Clock} tone="orange" size={16} /></div><p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p><Badge tone="orange">{dueCount} payments due soon</Badge></Card>
-        <Card><div className="flex items-start justify-between mb-2"><p className="text-xs text-mute font-semibold">Annual Amount</p><IconTile icon={TrendingDown} tone="red" size={16} /></div><p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(annualAmount)}</p><Badge tone="red">-6.8% vs last year</Badge></Card>
+        <Card>
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs text-mute font-semibold">Total Monthly Commitment</p>
+            <IconTile icon={RefreshCw} tone="green" size={16} />
+          </div>
+          <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p>
+          <Badge tone="green">-4.2% vs last month</Badge>
+        </Card>
+        <Card>
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs text-mute font-semibold">Active Subscriptions</p>
+            <IconTile icon={TrendingUp} tone="green" size={16} />
+          </div>
+          <p className="text-xl font-black tracking-tight text-ink mb-1">{activeCount}</p>
+          <Badge tone="green">No change</Badge>
+        </Card>
+        <Card>
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs text-mute font-semibold">Due This Month</p>
+            <IconTile icon={Clock} tone="orange" size={16} />
+          </div>
+          <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p>
+          <Badge tone="orange">{dueCount} payments due soon</Badge>
+        </Card>
+        <Card>
+          <div className="flex items-start justify-between mb-2">
+            <p className="text-xs text-mute font-semibold">Annual Amount</p>
+            <IconTile icon={TrendingDown} tone="red" size={16} />
+          </div>
+          <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(annualAmount)}</p>
+          <Badge tone="red">-6.8% vs last year</Badge>
+        </Card>
       </div>
 
       {/* Toolbar */}
       <div className="flex gap-3 flex-wrap items-center">
-        {/* Category filter tabs */}
         <div className="flex gap-1 bg-surface rounded-xl p-1 border border-ink/5">
           {CATEGORY_FILTERS.map(f => (
             <button key={f} onClick={() => setActiveFilter(f)}
@@ -366,17 +510,14 @@ export default function RecurringPage() {
           ))}
         </div>
         
-        {/* Search bar */}
         <div className="flex items-center gap-2 flex-1 min-w-45 bg-surface rounded-xl px-4 py-2.5 border border-ink/10">
           <Search size={16} className="text-mute" />
           <input type="text" placeholder="Search recurring..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 text-sm text-ink bg-transparent focus:outline-none placeholder:text-mute" />
           {search && <button onClick={() => setSearch('')} className="text-mute hover:text-ink"><X size={14} /></button>}
         </div>
         
-        {/* Filter button (modal) */}
         <ActionButton icon={Filter} variant="outline" onClick={() => setIsFilterModalOpen(true)}>Filter</ActionButton>
         
-        {/* Reset all filters button */}
         {(activeFilter !== 'All' || search || filterCategory !== 'all' || filterStatus !== 'all') && (
           <button onClick={resetAllFilters} className="text-xs text-mute hover:text-ink underline">Clear all</button>
         )}
@@ -410,11 +551,19 @@ export default function RecurringPage() {
             <tbody className="divide-y divide-ink/5">
               {filteredItems.map(item => (
                 <tr key={item.id} className="hover:bg-surface-soft/50 transition-colors group">
-                  <td className="py-4 pr-4"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-surface-soft flex items-center justify-center text-lg shrink-0">{item.icon}</div><div><p className="text-sm font-semibold text-ink">{item.name}</p><p className="text-xs text-mute">{item.description}</p></div></div></td>
+                  <td className="py-4 pr-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-surface-soft flex items-center justify-center text-lg shrink-0">{item.icon || '📋'}</div>
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{item.name}</p>
+                        <p className="text-xs text-mute">{item.description}</p>
+                      </div>
+                    </div>
+                  </td>
                   <td className="py-4 pr-4"><Badge tone={getCategoryTone(item.category)}>{item.category}</Badge></td>
                   <td className="py-4 pr-4 text-sm font-semibold text-ink">{formatCurrency(item.amount)}</td>
                   <td className="py-4 pr-4 text-sm text-body">{item.frequency}</td>
-                  <td className="py-4 pr-4 text-sm text-body">{formatDate(item.nextPayment)}</td>
+                  <td className="py-4 pr-4 text-sm text-body">{formatDate(item.next_payment)}</td>
                   <td className="py-4 pr-4">
                     <button onClick={() => handleToggleStatus(item)} className={`px-2 py-1 rounded-full text-xs font-semibold transition-colors ${item.status === 'active' ? 'bg-positive/20 text-positive hover:bg-positive/30' : 'bg-mute/20 text-mute hover:bg-mute/30'}`}>
                       {item.status === 'active' ? 'Active' : 'Inactive'}
@@ -422,11 +571,17 @@ export default function RecurringPage() {
                   </td>
                   <td className="py-4">
                     <div className="relative">
-                      <button onClick={() => setActionMenuOpen(actionMenuOpen === item.id ? null : item.id)} className="w-8 h-8 rounded-full hover:bg-surface-soft flex items-center justify-center transition-colors"><MoreHorizontal size={16} className="text-mute" /></button>
+                      <button onClick={() => setActionMenuOpen(actionMenuOpen === item.id ? null : item.id)} className="w-8 h-8 rounded-full hover:bg-surface-soft flex items-center justify-center transition-colors">
+                        <MoreHorizontal size={16} className="text-mute" />
+                      </button>
                       {actionMenuOpen === item.id && (
                         <div className="absolute right-0 mt-2 w-36 bg-surface rounded-xl shadow-lg border border-ink/5 z-10 overflow-hidden">
-                          <button onClick={() => { handleEdit(item); setActionMenuOpen(null) }} className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-soft flex items-center gap-2"><Edit2 size={14} /> Edit</button>
-                          <button onClick={() => { setDeletingItem(item); setIsDeleteModalOpen(true); setActionMenuOpen(null) }} className="w-full px-4 py-2 text-left text-sm text-danger hover:bg-red-50 flex items-center gap-2"><Trash2 size={14} /> Delete</button>
+                          <button onClick={() => { handleEdit(item); setActionMenuOpen(null) }} className="w-full px-4 py-2 text-left text-sm text-ink hover:bg-surface-soft flex items-center gap-2">
+                            <Edit2 size={14} /> Edit
+                          </button>
+                          <button onClick={() => { setDeletingItem(item); setIsDeleteModalOpen(true); setActionMenuOpen(null) }} className="w-full px-4 py-2 text-left text-sm text-danger hover:bg-red-50 flex items-center gap-2">
+                            <Trash2 size={14} /> Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -441,7 +596,7 @@ export default function RecurringPage() {
         </div>
       </Card>
 
-      {/* Savings Banner dengan Review Button */}
+      {/* Savings Banner */}
       {activeItems.length > 0 && (
         <div className="bg-ink rounded-2xl p-5 flex items-center gap-4 flex-wrap">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-xl shrink-0">🐷</div>
@@ -449,18 +604,25 @@ export default function RecurringPage() {
             <p className="text-sm text-white font-semibold">You can save up to <span className="text-primary font-black">{formatCurrency(Math.round(totalMonthly * 0.15))}</span> per month by reviewing unused subscriptions.</p>
             <p className="text-xs text-white/50">Review your subscriptions and cancel what you don't use.</p>
           </div>
-          <button 
-            onClick={handleReviewSubscriptions}
-            className="px-5 py-2.5 bg-primary text-ink text-sm font-semibold rounded-xl hover:bg-primary-hover transition-colors shrink-0 flex items-center gap-2"
-          >
+          <button onClick={handleReviewSubscriptions} className="px-5 py-2.5 bg-primary text-ink text-sm font-semibold rounded-xl hover:bg-primary-hover transition-colors shrink-0 flex items-center gap-2">
             <Eye size={16} /> Review Subscriptions →
           </button>
         </div>
       )}
 
       {/* Modals */}
-      <RecurringFormModal isOpen={isAddModalOpen} onClose={() => { setIsAddModalOpen(false); setEditingItem(null) }} onSave={handleSave} editingItem={editingItem} />
-      <DeleteConfirmModal isOpen={isDeleteModalOpen} onClose={() => { setIsDeleteModalOpen(false); setDeletingItem(null) }} onConfirm={handleDelete} itemName={deletingItem?.name} />
+      <RecurringFormModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => { setIsAddModalOpen(false); setEditingItem(null) }} 
+        onSave={handleSave}
+        editingItem={editingItem}
+      />
+      <DeleteConfirmModal 
+        isOpen={isDeleteModalOpen} 
+        onClose={() => { setIsDeleteModalOpen(false); setDeletingItem(null) }} 
+        onConfirm={handleDelete}
+        itemName={deletingItem?.name}
+      />
       <FilterModal 
         isOpen={isFilterModalOpen} 
         onClose={() => setIsFilterModalOpen(false)} 

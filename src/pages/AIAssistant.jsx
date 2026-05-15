@@ -1,16 +1,18 @@
 // src/pages/AIAssistant.jsx
 // ─────────────────────────────────────────────
-// AI Assistant — powered by Groq (FREE, blazing fast)
-// Requires: VITE_GROQ_API_KEY in .env file
+// AI Assistant — powered by Groq API (Strict Finance Only)
+// Connected to Supabase for real transaction data
 // ─────────────────────────────────────────────
 
 import { useState, useRef, useEffect } from 'react'
-import {
-  Send, TrendingUp, Lightbulb, Target, BarChart3,
+import { 
+  Send, TrendingUp, Lightbulb, Target, BarChart3, 
   Sparkles, Wallet, ReceiptText, FileText,
   Bot, Trash2, Copy, Check, Loader2
 } from 'lucide-react'
 import { Card, IconTile, Badge, ActionButton } from '../components/common'
+import { useTransactions } from '../hooks/useTransactions'
+import { useAuth } from '../contexts/AuthContext'
 
 // ─────────────────────────────────────────────
 // Quick suggestions
@@ -30,11 +32,12 @@ const QUICK_ACTIONS = [
 ]
 
 // ─────────────────────────────────────────────
-// Call Groq API — STRICT FINANCIAL ONLY
+// Call Groq API (Strict Finance Only)
 // ─────────────────────────────────────────────
 async function callGroq(messages, transactions, totalBalance, monthlyIncome, monthlyExpense) {
+  // Build financial context from real user data
   const categories = {}
-  transactions.filter(t => !t.positive).forEach(t => {
+  transactions?.filter(t => !t.positive).forEach(t => {
     categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
   })
   const sortedCats = Object.entries(categories).sort((a, b) => b[1] - a[1])
@@ -48,6 +51,9 @@ Current financial status:
 
 Top spending categories:
 ${sortedCats.slice(0, 5).map(([cat, amt]) => `- ${cat}: Rp${amt.toLocaleString('id-ID')}`).join('\n')}
+
+Recent transactions:
+${transactions?.slice(0, 5).map(t => `- ${t.name}: ${t.positive ? '+' : '-'}Rp${Math.abs(t.amount).toLocaleString('id-ID')} (${t.category})`).join('\n')}
 `
 
   const systemPrompt = `You are MoneyPulse Assistant, a **strictly financial-only AI**. You are embedded in a personal finance app.
@@ -80,12 +86,16 @@ ${financialContext}`
       }),
     })
 
-    if (!response.ok) throw new Error('API Error')
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error?.message || 'API Error')
+    }
+
     const data = await response.json()
     return data.choices[0].message.content
   } catch (error) {
     console.error('Groq API error:', error)
-    return "I'm having trouble connecting right now. Please check your API key and try again."
+    return "I'm having trouble connecting right now. Please check your API key and try again. Make sure VITE_GROQ_API_KEY is set in your .env file."
   }
 }
 
@@ -109,10 +119,11 @@ function MessageBubble({ msg, onCopy }) {
           AI
         </div>
       )}
-      <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed relative ${isUser
-        ? 'bg-ink text-primary rounded-br-sm'
-        : 'bg-surface border border-ink/5 text-body rounded-bl-sm'
-        }`}>
+      <div className={`max-w-[78%] px-4 py-3 rounded-2xl text-sm leading-relaxed relative ${
+        isUser
+          ? 'bg-ink text-primary rounded-br-sm'
+          : 'bg-surface border border-ink/5 text-body rounded-bl-sm'
+      }`}>
         {msg.content}
         {!isUser && (
           <button
@@ -152,12 +163,13 @@ function StatCard({ label, value, note, icon: Icon, tone = 'green' }) {
 // ─────────────────────────────────────────────
 // Main AI Assistant Page
 // ─────────────────────────────────────────────
-export default function AIAssistantPage({ transactions = [] }) {
-  // ─── State ─────────────────────────────────
+export default function AIAssistantPage() {
+  const { user } = useAuth()
+  const { transactions, loading: txLoading } = useTransactions()
   const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'Hi! I\'m your MoneyPulse AI assistant powered by **Groq**. I can see your financial data and give you personalized advice.\n\nAsk me anything about your budget, savings goals, or spending patterns!'
+    { 
+      role: 'assistant', 
+      content: 'Hi! I\'m your MoneyPulse AI assistant powered by **Groq**. I can see your financial data and give you personalized advice.\n\nAsk me anything about your budget, savings goals, or spending patterns!' 
     }
   ])
   const [input, setInput] = useState('')
@@ -165,10 +177,10 @@ export default function AIAssistantPage({ transactions = [] }) {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
-  // ─── Calculate financial stats ─────────────
-  const totalBalance = transactions.reduce((sum, t) => sum + t.amount, 0)
-  const monthlyIncome = transactions.filter(t => t.positive).reduce((sum, t) => sum + t.amount, 0)
-  const monthlyExpense = Math.abs(transactions.filter(t => !t.positive).reduce((sum, t) => sum + t.amount, 0))
+  // Calculate financial stats from real data
+  const totalBalance = transactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+  const monthlyIncome = transactions?.filter(t => t.positive).reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+  const monthlyExpense = Math.abs(transactions?.filter(t => !t.positive).reduce((sum, t) => sum + (t.amount || 0), 0) || 0)
   const savingsRate = monthlyIncome > 0 ? Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100) : 0
   const questionsCount = messages.filter(m => m.role === 'user').length
 
@@ -180,6 +192,13 @@ export default function AIAssistantPage({ transactions = [] }) {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Get top spending category
+  const categories = {}
+  transactions?.filter(t => !t.positive).forEach(t => {
+    categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
+  })
+  const topCategory = Object.entries(categories).sort((a, b) => b[1] - a[1])[0]
 
   // ─── Send message to Groq ──────────────────
   const sendMessage = async (text) => {
@@ -197,9 +216,9 @@ export default function AIAssistantPage({ transactions = [] }) {
       const reply = await callGroq(apiMessages, transactions, totalBalance, monthlyIncome, monthlyExpense)
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch (err) {
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please check your API key and try again.'
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error. Please check your Groq API key and try again.' 
       }])
     } finally {
       setLoading(false)
@@ -210,9 +229,9 @@ export default function AIAssistantPage({ transactions = [] }) {
   // ─── Utilities ─────────────────────────────
   const clearChat = () => {
     if (confirm('Clear all conversation history?')) {
-      setMessages([{
-        role: 'assistant',
-        content: 'Chat cleared! Ready to help with your finances again. Ask me anything! 💚'
+      setMessages([{ 
+        role: 'assistant', 
+        content: 'Chat cleared! Ready to help with your finances again. Ask me anything! 💚' 
       }])
     }
   }
@@ -228,14 +247,14 @@ export default function AIAssistantPage({ transactions = [] }) {
     }
   }
 
-  // ─── Top spending category ─────────────────
-  const categories = {}
-  transactions.filter(t => !t.positive).forEach(t => {
-    categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
-  })
-  const topCategory = Object.entries(categories).sort((a, b) => b[1] - a[1])[0]
+  if (txLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
-  // ─── Render ─────────────────────────────────
   return (
     <>
       {/* Header */}
@@ -252,41 +271,41 @@ export default function AIAssistantPage({ transactions = [] }) {
 
       {/* Stats Row — based on real data */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Monthly Income"
-          value={`Rp${monthlyIncome.toLocaleString('id-ID')}`}
-          note="+8.1% vs last month"
-          icon={TrendingUp}
-          tone="green"
+        <StatCard 
+          label="Monthly Income" 
+          value={`Rp${monthlyIncome.toLocaleString('id-ID')}`} 
+          note="+8.1% vs last month" 
+          icon={TrendingUp} 
+          tone="green" 
         />
-        <StatCard
-          label="Monthly Expense"
-          value={`Rp${monthlyExpense.toLocaleString('id-ID')}`}
-          note="-2.4% vs last month"
-          icon={TrendingUp}
-          tone="red"
+        <StatCard 
+          label="Monthly Expense" 
+          value={`Rp${monthlyExpense.toLocaleString('id-ID')}`} 
+          note="-2.4% vs last month" 
+          icon={TrendingUp} 
+          tone="red" 
         />
-        <StatCard
-          label="Savings Rate"
-          value={`${savingsRate}%`}
-          note={savingsRate > 30 ? 'Excellent!' : 'Room to improve'}
-          icon={Target}
-          tone="purple"
+        <StatCard 
+          label="Savings Rate" 
+          value={`${savingsRate}%`} 
+          note={savingsRate > 30 ? 'Excellent!' : 'Room to improve'} 
+          icon={Target} 
+          tone="purple" 
         />
-        <StatCard
-          label="Questions Asked"
-          value={String(questionsCount)}
-          note="This session"
-          icon={Bot}
-          tone="blue"
+        <StatCard 
+          label="Questions Asked" 
+          value={String(questionsCount)} 
+          note="This session" 
+          icon={Bot} 
+          tone="blue" 
         />
       </div>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Chat Panel */}
-        <Card className="lg:col-span-3 flex flex-col" style={{ height: '580px' }}>
-          {/* Header - fixed di atas */}
+        <Card className="lg:col-span-3 flex flex-col" style={{ height: '560px' }}>
+          {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-ink/5 shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-ink font-black text-sm">
@@ -300,26 +319,24 @@ export default function AIAssistantPage({ transactions = [] }) {
             <Badge tone="green">Online</Badge>
           </div>
 
-          {/* Messages Area - scrollable, ambil sisa ruang */}
-          <div className="flex-1 overflow-y-auto py-4 px-2">
-            <div className="space-y-1">
-              {messages.map((msg, i) => (
-                <MessageBubble key={i} msg={msg} onCopy={handleCopy} />
-              ))}
-              {loading && (
-                <div className="flex justify-start mb-3">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-ink font-black text-xs shrink-0 mr-2.5">AI</div>
-                  <div className="bg-surface border border-ink/5 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-mute flex items-center gap-1">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>Thinking...</span>
-                  </div>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto py-4 px-2 space-y-1" style={{ maxHeight: '420px' }}>
+            {messages.map((msg, i) => (
+              <MessageBubble key={i} msg={msg} onCopy={handleCopy} />
+            ))}
+            {loading && (
+              <div className="flex justify-start mb-3">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-ink font-black text-xs shrink-0 mr-2.5">AI</div>
+                <div className="bg-surface border border-ink/5 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-mute flex items-center gap-1">
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Thinking...</span>
                 </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
           </div>
 
-          {/* Input Area - mentok di paling bawah card */}
+          {/* Input */}
           <div className="mt-auto pt-4 border-t border-ink/5 shrink-0">
             <div className="flex items-center gap-2 bg-surface-soft rounded-xl px-4 py-3">
               <input
@@ -332,7 +349,7 @@ export default function AIAssistantPage({ transactions = [] }) {
                 className="flex-1 text-sm text-ink bg-transparent focus:outline-none placeholder:text-mute"
                 disabled={loading}
               />
-              <button
+              <button 
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || loading}
                 className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-ink hover:bg-primary-hover transition-colors disabled:opacity-40"
@@ -357,11 +374,11 @@ export default function AIAssistantPage({ transactions = [] }) {
               </div>
               <div>
                 <h3 className="text-xl font-black text-white leading-tight">
-                  {monthlyExpense > monthlyIncome
-                    ? `Your expenses exceed income by `
+                  {monthlyExpense > monthlyIncome 
+                    ? `Your expenses exceed income by ` 
                     : `You're saving ${savingsRate}% of your income! `}
                   <span className="text-primary">
-                    {monthlyExpense > monthlyIncome
+                    {monthlyExpense > monthlyIncome 
                       ? `Rp${(monthlyExpense - monthlyIncome).toLocaleString('id-ID')}`
                       : `Great job!`}
                   </span>
@@ -374,7 +391,7 @@ export default function AIAssistantPage({ transactions = [] }) {
                 Rp{Math.round(monthlyExpense * 0.15).toLocaleString('id-ID')}
               </p>
             </div>
-            <button
+            <button 
               onClick={() => sendMessage('How can I save more money based on my actual spending?')}
               className="w-full py-2.5 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover transition-colors"
             >
@@ -387,8 +404,8 @@ export default function AIAssistantPage({ transactions = [] }) {
             <p className="text-xs font-black uppercase tracking-wider text-mute mb-3">Quick Questions</p>
             <div className="flex flex-col gap-2">
               {SUGGESTIONS.map(s => (
-                <button
-                  key={s.text}
+                <button 
+                  key={s.text} 
                   onClick={() => sendMessage(s.text)}
                   className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface-soft text-left transition-colors group"
                 >
@@ -404,8 +421,8 @@ export default function AIAssistantPage({ transactions = [] }) {
             <p className="text-xs font-black uppercase tracking-wider text-mute mb-3">Quick Actions</p>
             <div className="flex flex-wrap gap-2">
               {QUICK_ACTIONS.map(a => (
-                <button
-                  key={a.label}
+                <button 
+                  key={a.label} 
                   onClick={() => sendMessage(a.prompt)}
                   className="px-3 py-2 rounded-xl bg-surface-soft hover:bg-primary-pale text-sm font-semibold text-ink transition-colors flex items-center gap-1.5"
                 >

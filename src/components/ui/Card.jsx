@@ -9,12 +9,12 @@ export default function Card({
     <div
       className={clsx(
         `
-          rounded-[24px]
+          rounded-3xl
 
           border
-          border-[var(--color-border)]
+          border-(--color-border)
 
-          bg-[var(--color-surface)]
+          bg-(--color-surface)
 
           p-6
 
