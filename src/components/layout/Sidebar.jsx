@@ -1,5 +1,8 @@
 // src/components/layout/Sidebar.jsx
-import { ChevronLeft, ChevronRight, LogOut, LayoutDashboard, TrendingUp, BarChart3, RefreshCw, Bot, Settings } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Menu, X, LogOut, LayoutDashboard, TrendingUp, BarChart3, RefreshCw, Bot, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard },
@@ -11,14 +14,25 @@ const NAV_ITEMS = [
 ]
 
 export default function Sidebar({ activePage, onNavigate, isCollapsed, onToggle }) {
+  const navigate = useNavigate()
+  const { signOut } = useAuth()
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true)
+  }
+
+  const handleConfirmLogout = async () => {
+    await signOut()
+    setShowLogoutModal(false)
+    navigate('/')
+  }
+
   return (
     <>
       {/* Mobile overlay */}
       {!isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-black/30 z-40 lg:hidden"
-          onClick={onToggle}
-        />
+        <div className="fixed inset-0 bg-black/30 z-40 lg:hidden" onClick={onToggle} />
       )}
       
       {/* Sidebar */}
@@ -40,16 +54,11 @@ export default function Sidebar({ activePage, onNavigate, isCollapsed, onToggle 
               <span className="font-black text-base" style={{ color: 'var(--color-ink)' }}>MoneyPulse</span>
             </div>
           )}
-          
-          {/* Toggle button */}
           <button 
             onClick={onToggle}
             className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-surface-soft cursor-pointer shrink-0"
-            style={{ backgroundColor: 'transparent' }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-soft)'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           >
-            {isCollapsed ? <ChevronRight size={16} style={{ color: 'var(--color-mute)' }} /> : <ChevronLeft size={16} style={{ color: 'var(--color-mute)' }} />}
+            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
           </button>
         </div>
 
@@ -61,10 +70,7 @@ export default function Sidebar({ activePage, onNavigate, isCollapsed, onToggle 
               <button 
                 key={label} 
                 onClick={() => onNavigate(label)}
-                className={`
-                  w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all cursor-pointer
-                  ${isCollapsed ? 'justify-center' : ''}
-                `}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-left transition-all cursor-pointer ${isCollapsed ? 'justify-center' : ''}`}
                 style={{ 
                   backgroundColor: isActive ? 'var(--color-primary-pale)' : 'transparent', 
                   color: isActive ? 'var(--color-positive)' : 'var(--color-body)',
@@ -78,14 +84,11 @@ export default function Sidebar({ activePage, onNavigate, isCollapsed, onToggle 
           })}
         </nav>
 
-        {/* Logout button di bawah */}
+        {/* Logout Button */}
         <div className="px-2 pb-4 mt-auto">
           <button 
-            onClick={() => {/* handle logout */}}
-            className={`
-              w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer
-              ${isCollapsed ? 'justify-center' : ''}
-            `}
+            onClick={handleLogoutClick}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${isCollapsed ? 'justify-center' : ''}`}
             style={{ color: 'var(--color-danger)' }}
             onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(208, 50, 56, 0.1)'}
             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -96,6 +99,20 @@ export default function Sidebar({ activePage, onNavigate, isCollapsed, onToggle 
           </button>
         </div>
       </aside>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-9999 p-4" onClick={() => setShowLogoutModal(false)}>
+          <div className="bg-surface rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-black mb-4">Confirm Logout</h2>
+            <p className="text-mute mb-6">Are you sure you want to logout?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutModal(false)} className="flex-1 py-2 rounded-xl border border-ink/10">Cancel</button>
+              <button onClick={handleConfirmLogout} className="flex-1 py-2 rounded-xl bg-danger text-white">Logout</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

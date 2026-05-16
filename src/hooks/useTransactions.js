@@ -29,20 +29,30 @@ export function useTransactions() {
     setLoading(false)
   }
 
-  const addTransaction = async (transaction) => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert([{ ...transaction, user_id: user.id }])
-      .select()
-      .single()
+const addTransaction = async (transaction) => {
+  // Ambil hanya field yang ada di database
+  const { data, error } = await supabase
+    .from('transactions')
+    .insert([{
+      user_id: user.id,
+      name: transaction.name,
+      detail: transaction.detail || '',
+      category: transaction.category,
+      amount: transaction.amount,
+      date: transaction.date,
+      positive: transaction.positive,
+    }])
+    .select()
+    .single()
 
-    if (error) {
-      console.error('Error adding transaction:', error)
-      return null
-    }
-    setTransactions(prev => [data, ...prev])
-    return data
+  if (error) {
+    console.error('Error adding transaction:', error)
+    return null
   }
+  
+  setTransactions(prev => [data, ...prev])
+  return data
+}
 
   const deleteTransaction = async (id) => {
     const { error } = await supabase

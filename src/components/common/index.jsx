@@ -1,43 +1,53 @@
-// src/components/common/index.jsx
-// ─────────────────────────────────────────────
-// All reusable UI primitives — 100% Tailwind
-// Modal with blur overlay + body scroll lock
-// ─────────────────────────────────────────────
-
 import { useEffect } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 
-// ─────────────────────────────────────────────
-// Modal Component with blur overlay
-// ─────────────────────────────────────────────
-export function Modal({ isOpen, onClose, title, children }) {
+export function Modal({ isOpen, onClose, title, children, type = 'default' }) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   return (
     <div 
-      className="fixed inset-0 flex items-center justify-center z-9999 p-4" 
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-9999 p-4" 
       onClick={onClose}
     >
       <div 
-        className="rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto animate-fade-in shadow-2xl" 
-        style={{ backgroundColor: 'var(--color-surface)' }} 
+        className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col"
+        style={{ 
+          backgroundColor: 'var(--color-surface)',
+          maxHeight: '85vh'
+        }} 
         onClick={e => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 px-6 py-4 border-b" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        {/* Header - tetap di atas */}
+        <div className="shrink-0 px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black tracking-tight" style={{ color: 'var(--color-ink)' }}>{title}</h2>
             <button 
               onClick={onClose} 
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
               style={{ backgroundColor: 'var(--color-surface-soft)' }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-pale)'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-soft)'}
             >
-              ✕
+              <X size={16} style={{ color: 'var(--color-ink)' }} />
             </button>
           </div>
         </div>
-        <div className="px-6 py-4">{children}</div>
+        
+        {/* Content - bisa di-scroll */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -78,7 +88,7 @@ export function IconTile({ icon: Icon, tone = 'green', size = 20 }) {
   const color = colors[tone] || colors.green
   
   return (
-    <div className="flex items-center justify-center rounded-xl w-10 h-10 shrink-0" style={{ backgroundColor: color.bg }}>
+    <div className="flex items-center justify-center rounded-xl w-10 h-10 shrink-0 transition-all duration-200 hover:scale-105" style={{ backgroundColor: color.bg }}>
       <Icon size={size} style={{ color: color.text }} />
     </div>
   )
@@ -93,7 +103,8 @@ export function Card({ children, className = '', tone = 'white' }) {
                   tone === 'green' ? '#e2f6d5' : '#ffffff'
                   
   return (
-    <div className={`rounded-2xl p-6 ${className}`} style={{ backgroundColor: bgColor, border: '1px solid rgba(14, 15, 12, 0.08)' }}>
+    <div className={`rounded-2xl p-6 transition-all duration-200 hover:shadow-md ${className}`} 
+      style={{ backgroundColor: bgColor, border: '1px solid rgba(14, 15, 12, 0.08)' }}>
       {children}
     </div>
   )
@@ -112,10 +123,10 @@ export function ActionButton({ children, icon: Icon, onClick, variant = 'primary
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${className}`}
+      className={`inline-flex items-center gap-2.5 px-5 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer ${className}`}
       style={{ backgroundColor: style.bg, color: style.text, border: style.border }}
-      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = style.hover}
-      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = style.bg}
+      onMouseEnter={(e) => { if (style.hover) e.currentTarget.style.backgroundColor = style.hover }}
+      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = style.bg }}
     >
       {Icon && <Icon size={16} />}
       {children}
@@ -151,7 +162,7 @@ export function RoundIconButton({ onClick }) {
   return (
     <button
       onClick={onClick}
-      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+      className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 active:scale-95 shrink-0 cursor-pointer"
       style={{ backgroundColor: '#f0f2ef' }}
       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e2f6d5'}
       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0f2ef'}
@@ -168,10 +179,10 @@ export function Toggle({ checked, onChange }) {
   return (
     <button
       onClick={() => onChange(!checked)}
-      className="relative w-11 h-6 rounded-full transition-colors cursor-pointer"
+      className="relative w-11 h-6 rounded-full transition-all duration-200 cursor-pointer hover:scale-105"
       style={{ backgroundColor: checked ? '#9fe870' : '#e8ebe6', border: !checked ? '1px solid rgba(14, 15, 12, 0.08)' : 'none' }}
     >
-      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
     </button>
   )
 }
@@ -215,8 +226,10 @@ export function Input({ type = 'text', value, onChange, placeholder, required })
       onChange={onChange}
       placeholder={placeholder}
       required={required}
-      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition"
+      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all duration-200"
       style={{ backgroundColor: '#ffffff', border: '1px solid rgba(14, 15, 12, 0.08)', color: '#0e0f0c' }}
+      onFocus={(e) => e.currentTarget.style.borderColor = '#9fe870'}
+      onBlur={(e) => e.currentTarget.style.borderColor = 'rgba(14, 15, 12, 0.08)'}
     />
   )
 }
@@ -229,8 +242,10 @@ export function Select({ value, onChange, children }) {
     <select
       value={value}
       onChange={onChange}
-      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition appearance-none cursor-pointer"
+      className="w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all duration-200 appearance-none cursor-pointer"
       style={{ backgroundColor: '#ffffff', border: '1px solid rgba(14, 15, 12, 0.08)', color: '#0e0f0c' }}
+      onFocus={(e) => e.currentTarget.style.borderColor = '#9fe870'}
+      onBlur={(e) => e.currentTarget.style.borderColor = 'rgba(14, 15, 12, 0.08)'}
     >
       {children}
     </select>

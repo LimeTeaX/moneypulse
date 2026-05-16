@@ -5,19 +5,14 @@ import {
   ChevronRight, AlertCircle, Eye
 } from 'lucide-react'
 import { ActionButton, Badge, Card, IconTile, Modal, FormGroup, Input, Select } from '../components/common'
+import { Toast, useToast } from '../components/common/Toast'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 
-// ─────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────
 const CATEGORY_FILTERS = ['All', 'Subscriptions', 'Bills', 'Loans', 'Insurance']
 const FREQUENCY_OPTIONS = ['Monthly', 'Weekly', 'Yearly', 'One-time']
 const CATEGORY_OPTIONS = ['Subscription', 'Bill', 'Loan', 'Insurance']
 
-// ─────────────────────────────────────────────
-// Helper functions
-// ─────────────────────────────────────────────
 const formatCurrency = (amount) => `Rp${amount.toLocaleString('id-ID')}`
 
 const formatDate = (dateString) => {
@@ -63,10 +58,7 @@ function RecurringFormModal({ isOpen, onClose, onSave, editingItem }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formData.name || !formData.amount) {
-      alert('Please fill in name and amount')
-      return
-    }
+    if (!formData.name || !formData.amount) return
     onSave({
       id: editingItem?.id,
       name: formData.name,
@@ -235,6 +227,7 @@ function ReviewModal({ isOpen, onClose, items, onUnsubscribe }) {
 // ─────────────────────────────────────────────
 export default function RecurringPage() {
   const { user } = useAuth()
+  const { toast, showToast, hideToast } = useToast()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState('All')
@@ -261,7 +254,7 @@ export default function RecurringPage() {
       .order('created_at', { ascending: false })
     
     if (error) {
-      console.error('Error fetching recurring:', error)
+      showToast('Error fetching recurring data', 'error')
     } else {
       setItems(data || [])
     }
@@ -272,7 +265,7 @@ export default function RecurringPage() {
     fetchRecurring()
   }, [user])
 
-  // ─── Statistics from real data (ALL REALTIME) ───
+  // ─── Statistics from real data ───
   const activeItems = items.filter(i => i.status === 'active')
   const totalMonthly = activeItems.reduce((s, i) => s + i.amount, 0)
   const activeCount = activeItems.length
@@ -284,7 +277,7 @@ export default function RecurringPage() {
   }).length
   const annualAmount = totalMonthly * 12
 
-  // ─── Calculate percentage changes (REALTIME) ───
+  // ─── Calculate percentage changes ───
   const calculatePercentageChange = (current, previous) => {
     if (previous === 0) return current > 0 ? 100 : 0
     return ((current - previous) / previous) * 100
@@ -311,7 +304,6 @@ export default function RecurringPage() {
 
   const monthlyChange = calculatePercentageChange(currentMonthTotal, lastMonthTotal)
   
-  // Active count change (compare with last month's active count)
   let lastMonthActiveCount = 0
   activeItems.forEach(item => {
     const createdAt = new Date(item.created_at)
@@ -321,7 +313,6 @@ export default function RecurringPage() {
   })
   const activeCountChange = calculatePercentageChange(activeCount, lastMonthActiveCount)
 
-  // Due count change
   let lastMonthDueCount = 0
   activeItems.forEach(item => {
     const nextDate = new Date(item.next_payment)
@@ -334,7 +325,6 @@ export default function RecurringPage() {
   })
   const dueCountChange = calculatePercentageChange(dueCount, lastMonthDueCount)
 
-  // Annual change (compare total monthly with last year average)
   const monthlyAverage = activeItems.length > 0 ? totalMonthly / activeItems.length : 0
   let lastYearAverage = 0
   let lastYearCount = 0
@@ -375,9 +365,10 @@ export default function RecurringPage() {
     setSearch('')
     setFilterCategory('all')
     setFilterStatus('all')
+    showToast('All filters cleared', 'info')
   }
 
-  // ─── CRUD Operations ───
+  // ─── CRUD Operations with Toast ───
   const handleAdd = async (newItem) => {
     const { data, error } = await supabase
       .from('recurring')
@@ -386,10 +377,10 @@ export default function RecurringPage() {
       .single()
     
     if (error) {
-      console.error('Error adding recurring:', error)
-      alert('Failed to add recurring')
+      showToast('Failed to add recurring: ' + error.message, 'error')
     } else {
       setItems([data, ...items])
+      showToast('Recurring added successfully!', 'success')
     }
   }
 
@@ -412,28 +403,38 @@ export default function RecurringPage() {
           status: savedItem.status,
           icon: savedItem.icon
         })
-        .eq('id', savedItem.id)
+        .eq('id', editingItem.id)
         .eq('user_id', user.id)
       
       if (error) {
-        console.error('Error updating recurring:', error)
-        alert('Failed to update recurring')
+        showToast('Failed to update recurring: ' + error.message, 'error')
       } else {
-        setItems(items.map(i => i.id === savedItem.id ? { ...i, ...savedItem } : i))
+        setItems(items.map(i => i.id === editingItem.id ? { ...i, ...savedItem } : i))
         setEditingItem(null)
+        showToast('Recurring updated successfully!', 'success')
       }
     } else {
       const { data, error } = await supabase
         .from('recurring')
-        .insert([{ ...savedItem, user_id: user.id }])
+        .insert([{ 
+          name: savedItem.name,
+          description: savedItem.description,
+          category: savedItem.category,
+          amount: savedItem.amount,
+          frequency: savedItem.frequency,
+          next_payment: savedItem.next_payment,
+          status: savedItem.status,
+          icon: savedItem.icon,
+          user_id: user.id
+        }])
         .select()
         .single()
       
       if (error) {
-        console.error('Error adding recurring:', error)
-        alert('Failed to add recurring')
+        showToast('Failed to add recurring: ' + error.message, 'error')
       } else {
         setItems([data, ...items])
+        showToast('Recurring added successfully!', 'success')
       }
     }
   }
@@ -448,12 +449,12 @@ export default function RecurringPage() {
       .eq('user_id', user.id)
     
     if (error) {
-      console.error('Error deleting recurring:', error)
-      alert('Failed to delete recurring')
+      showToast('Failed to delete recurring: ' + error.message, 'error')
     } else {
       setItems(items.filter(i => i.id !== deletingItem.id))
       setIsDeleteModalOpen(false)
       setDeletingItem(null)
+      showToast('Recurring deleted successfully!', 'success')
     }
   }
 
@@ -466,10 +467,10 @@ export default function RecurringPage() {
       .eq('user_id', user.id)
     
     if (error) {
-      console.error('Error toggling status:', error)
-      alert('Failed to update status')
+      showToast('Failed to update status', 'error')
     } else {
       setItems(items.map(i => i.id === item.id ? { ...i, status: newStatus } : i))
+      showToast(`Status changed to ${newStatus}`, 'info')
     }
   }
 
@@ -479,6 +480,7 @@ export default function RecurringPage() {
     )
     setReviewItems(itemsToReview)
     setIsReviewModalOpen(true)
+    showToast(`${itemsToReview.length} subscriptions ready for review`, 'info')
   }
 
   const handleUnsubscribe = async (id, name) => {
@@ -490,13 +492,13 @@ export default function RecurringPage() {
         .eq('user_id', user.id)
       
       if (error) {
-        console.error('Error unsubscribing:', error)
-        alert('Failed to unsubscribe')
+        showToast('Failed to unsubscribe', 'error')
       } else {
         setItems(items.map(item => 
           item.id === id ? { ...item, status: 'inactive' } : item
         ))
         setReviewItems(reviewItems.filter(item => item.id !== id))
+        showToast(`Unsubscribed from ${name}`, 'success')
       }
     }
   }
@@ -511,6 +513,9 @@ export default function RecurringPage() {
 
   return (
     <>
+      {/* Toast Notification */}
+      <Toast isOpen={toast.isOpen} message={toast.message} type={toast.type} onClose={hideToast} />
+
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
@@ -521,7 +526,7 @@ export default function RecurringPage() {
         <ActionButton icon={Plus} onClick={() => { setEditingItem(null); setIsAddModalOpen(true) }}>Add Recurring</ActionButton>
       </div>
 
-      {/* Summary Cards - ALL REALTIME NO HARDCODE */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-start justify-between mb-2">
@@ -637,7 +642,7 @@ export default function RecurringPage() {
                     <button onClick={() => handleToggleStatus(item)} className={`px-2 py-1 rounded-full text-xs font-semibold transition-colors ${item.status === 'active' ? 'bg-positive/20 text-positive hover:bg-positive/30' : 'bg-mute/20 text-mute hover:bg-mute/30'}`}>
                       {item.status === 'active' ? 'Active' : 'Inactive'}
                     </button>
-                  </td>
+                   </td>
                   <td className="py-4">
                     <div className="relative">
                       <button onClick={() => setActionMenuOpen(actionMenuOpen === item.id ? null : item.id)} className="w-8 h-8 rounded-full hover:bg-surface-soft flex items-center justify-center transition-colors">
