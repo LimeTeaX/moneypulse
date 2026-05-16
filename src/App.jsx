@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { useTheme } from './contexts/ThemeContext'
 import Sidebar from './components/layout/Sidebar'
 import LandingPage from './pages/Landing'
 import AuthPage from './pages/Auth'
@@ -13,12 +14,12 @@ import RecurringPage from './pages/Recurring'
 import AIAssistantPage from './pages/AIAssistant'
 import SettingsPage from './pages/Settings'
 
-// ─────────────────────────────────────────────
 // Layout untuk halaman yang butuh sidebar
-// ─────────────────────────────────────────────
 function DashboardLayout({ children, activePage, onNavigate }) {
+  const { theme } = useTheme()
+
   return (
-    <div className="min-h-screen bg-surface-soft">
+    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-surface-soft)' }}>
       <div className="flex gap-6 p-6 max-w-350 mx-auto">
         <Sidebar activePage={activePage} onNavigate={onNavigate} />
         <main className="flex-1 min-w-0">
@@ -62,45 +63,21 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Landing Page - redirect ke dashboard kalo udah login */}
-      <Route 
-        path="/" 
-        element={
-          !user ? <LandingPage onNavigate={handleNavigate} /> : <Navigate to="/dashboard" />
-        } 
-      />
-      
-      {/* Auth Page */}
-      <Route 
-        path="/auth" 
-        element={
-          !user ? <AuthPage onNavigate={handleNavigate} /> : <Navigate to="/dashboard" />
-        } 
-      />
-      
-      {/* Auth Callback untuk Google OAuth */}
+      <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/dashboard" />} />
+      <Route path="/auth" element={!user ? <AuthPage /> : <Navigate to="/dashboard" />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
-      
-      {/* Dashboard & Protected Pages */}
-      <Route 
-        path="/dashboard" 
-        element={
-          user ? (
-            <DashboardLayout activePage={activePage} onNavigate={handleDashboardNavigate}>
-              {activePage === 'Dashboard' && <DashboardPage onNavigate={handleDashboardNavigate} />}
-              {activePage === 'Transactions' && <TransactionsPage onNavigate={handleDashboardNavigate} />}
-              {activePage === 'Analytics' && <AnalyticsPage />}
-              {activePage === 'Recurring' && <RecurringPage />}
-              {activePage === 'AI Assistant' && <AIAssistantPage />}
-              {activePage === 'Settings' && <SettingsPage />}
-            </DashboardLayout>
-          ) : (
-            <Navigate to="/" />
-          )
-        } 
-      />
-      
-      {/* Fallback - redirect ke home */}
+      <Route path="/dashboard" element={
+        user ? (
+          <DashboardLayout activePage={activePage} onNavigate={handleDashboardNavigate}>
+            {activePage === 'Dashboard' && <DashboardPage onNavigate={handleDashboardNavigate} />}
+            {activePage === 'Transactions' && <TransactionsPage onNavigate={handleDashboardNavigate} />}
+            {activePage === 'Analytics' && <AnalyticsPage />}
+            {activePage === 'Recurring' && <RecurringPage />}
+            {activePage === 'AI Assistant' && <AIAssistantPage />}
+            {activePage === 'Settings' && <SettingsPage />}
+          </DashboardLayout>
+        ) : <Navigate to="/" />
+      } />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   )

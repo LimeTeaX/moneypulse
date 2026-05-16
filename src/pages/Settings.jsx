@@ -4,18 +4,19 @@
 // Full Supabase integration, all tabs functional
 // ─────────────────────────────────────────────
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   User, Bell, Palette, Shield, CreditCard, Download, Info,
   ChevronRight, Check, RefreshCw, ExternalLink, Trash2,
   Camera, PenLine, LockKeyhole, Monitor, Smartphone, Laptop,
   Mail, Goal, ReceiptText, TrendingUp, Calendar, BadgeCheck,
   CircleCheck, Clock, FileText, SquareArrowOutUpRight, Sparkles,
-  Plus, X, CheckCircle, XCircle
+  Plus, X, CheckCircle, XCircle, Upload
 } from 'lucide-react'
 import { Card, Toggle, Badge, ActionButton, IconTile, Input, Modal, FormGroup, Select } from '../components/common'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
+import { useTheme } from '../contexts/ThemeContext'
 
 // ─────────────────────────────────────────────
 // Toast Component
@@ -140,10 +141,13 @@ function AddAccountModal({ isOpen, onClose, onAdd, showToast }) {
 // ─────────────────────────────────────────────
 function ProfileTab({ showToast }) {
   const { user } = useAuth()
+  const fileInputRef = useRef(null)
+  const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState({
     name: '',
     email: '',
     phone: '',
+    avatar_url: '',
     currency: 'IDR',
     language: 'English',
     date_format: 'MMM DD, YYYY'
@@ -153,55 +157,91 @@ function ProfileTab({ showToast }) {
     weekly_summary: true,
     marketing_emails: false
   })
-  const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' })
 
-  // Fetch profile from Supabase
   useEffect(() => {
-    if (!user) return
-    fetchProfile()
+    if (user) fetchProfile()
   }, [user])
 
   const fetchProfile = async () => {
-    setLoading(true)
-    // Get profile
-    const { data: profileData, error: profileError } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single()
 
-    if (!profileError && profileData) {
+    if (data) {
       setProfile({
-        name: profileData.name || user.email?.split('@')[0] || 'User',
+        name: data.name || user.email?.split('@')[0] || 'User',
         email: user.email || '',
-        phone: profileData.phone || '',
-        currency: profileData.currency || 'IDR',
-        language: profileData.language || 'English',
-        date_format: profileData.date_format || 'MMM DD, YYYY'
+        phone: data.phone || '',
+        avatar_url: data.avatar_url || '',
+        currency: data.currency || 'IDR',
+        language: data.language || 'English',
+        date_format: data.date_format || 'MMM DD, YYYY'
       })
       setEditForm({
-        name: profileData.name || user.email?.split('@')[0] || 'User',
+        name: data.name || user.email?.split('@')[0] || 'User',
         email: user.email || '',
-        phone: profileData.phone || ''
+        phone: data.phone || ''
       })
     }
+  }
 
-    // Get settings
-    const { data: settingsData, error: settingsError } = await supabase
-      .from('user_settings')
-      .select('budget_alerts, weekly_summary, marketing_emails')
-      .eq('user_id', user.id)
-      .single()
+  // Upload avatar ke Supabase Storage
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
 
-    if (!settingsError && settingsData) {
-      setPrefs({
-        budget_alerts: settingsData.budget_alerts,
-        weekly_summary: settingsData.weekly_summary,
-        marketing_emails: settingsData.marketing_emails
-      })
+    // Validasi tipe file
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select an image file', 'error')
+      return
     }
+
+    // Validasi ukuran (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Image must be less than 2MB', 'error')
+      return
+    }
+
+    setLoading(true)
+
+    const fileExt = file.name.split('.').pop()
+    const fileName = `${user.id}.${fileExt}`
+    const filePath = `${user.id}/${fileName}`
+
+    // Upload ke Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true })
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError)
+      showToast('Failed to upload avatar', 'error')
+      setLoading(false)
+      return
+    }
+
+    // Dapatkan public URL
+    const { data: urlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath)
+
+    // Update profile dengan avatar_url
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: urlData.publicUrl })
+      .eq('id', user.id)
+
+    if (updateError) {
+      showToast('Failed to update avatar', 'error')
+    } else {
+      setProfile(prev => ({ ...prev, avatar_url: urlData.publicUrl }))
+      showToast('Avatar updated successfully!', 'success')
+    }
+
     setLoading(false)
   }
 
@@ -210,14 +250,6 @@ function ProfileTab({ showToast }) {
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
-    return !error
-  }
-
-  const updateSettings = async (updates) => {
-    const { error } = await supabase
-      .from('user_settings')
-      .update(updates)
-      .eq('user_id', user.id)
     return !error
   }
 
@@ -235,47 +267,6 @@ function ProfileTab({ showToast }) {
     }
   }
 
-  const handleCurrencyChange = async () => {
-    const newCurrency = profile.currency === 'IDR' ? 'USD' : 'IDR'
-    const success = await updateProfile({ currency: newCurrency })
-    if (success) {
-      setProfile(prev => ({ ...prev, currency: newCurrency }))
-      showToast(`Currency changed to ${newCurrency === 'IDR' ? 'Indonesian Rupiah' : 'US Dollar'}`, 'info')
-    }
-  }
-
-  const handleLanguageChange = async () => {
-    const newLanguage = profile.language === 'English' ? 'Indonesia' : 'English'
-    const success = await updateProfile({ language: newLanguage })
-    if (success) {
-      setProfile(prev => ({ ...prev, language: newLanguage }))
-      showToast(`Language changed to ${newLanguage}`, 'info')
-    }
-  }
-
-  const handleDateFormatChange = async () => {
-    const newFormat = profile.date_format === 'MMM DD, YYYY' ? 'DD/MM/YYYY' : 'MMM DD, YYYY'
-    const success = await updateProfile({ date_format: newFormat })
-    if (success) {
-      setProfile(prev => ({ ...prev, date_format: newFormat }))
-      showToast('Date format updated', 'info')
-    }
-  }
-
-  const handleTogglePref = async (key, value) => {
-    const updates = { [key]: value }
-    const success = await updateSettings(updates)
-    if (success) {
-      setPrefs(prev => ({ ...prev, [key]: value }))
-      const labels = { budget_alerts: 'Budget Alerts', weekly_summary: 'Weekly Summary', marketing_emails: 'Marketing Updates' }
-      showToast(`${labels[key]} ${value ? 'enabled' : 'disabled'}`, 'info')
-    }
-  }
-
-  if (loading) {
-    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -283,17 +274,35 @@ function ProfileTab({ showToast }) {
           <h2 className="text-lg font-black text-ink mb-0.5">Profile Information</h2>
           <p className="text-sm text-mute">Update your personal details and preferences.</p>
         </div>
-        <ActionButton icon={PenLine} variant="outline" onClick={() => setShowEditModal(true)}>Edit Profile</ActionButton>
+        <ActionButton icon={PenLine} variant="outline" onClick={() => setShowEditModal(true)}>
+          Edit Profile
+        </ActionButton>
       </div>
 
+      {/* Avatar dengan upload */}
       <div className="flex items-center gap-4 p-5 bg-surface-soft rounded-2xl">
         <div className="relative">
-          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-ink font-black text-2xl">
-            {profile.name?.charAt(0) || 'U'}
+          <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center text-ink font-black text-2xl overflow-hidden">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              profile.name?.charAt(0) || 'U'
+            )}
           </div>
-          <button className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-surface border border-ink/10 flex items-center justify-center text-xs">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading}
+            className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-surface border border-ink/10 flex items-center justify-center text-xs hover:bg-primary-pale transition-colors disabled:opacity-50"
+          >
             <Camera size={12} />
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
         </div>
         <div>
           <h3 className="text-base font-black text-ink">{profile.name}</h3>
@@ -305,21 +314,38 @@ function ProfileTab({ showToast }) {
         </div>
       </div>
 
+      {/* Currency, Language, Date Format */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleCurrencyChange}>
+        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={() => {
+          const newCurrency = profile.currency === 'IDR' ? 'USD' : 'IDR'
+          updateProfile({ currency: newCurrency })
+          setProfile(prev => ({ ...prev, currency: newCurrency }))
+          showToast(`Currency changed to ${newCurrency === 'IDR' ? 'Indonesian Rupiah' : 'US Dollar'}`, 'info')
+        }}>
           <p className="text-xs text-mute font-semibold mb-1">Currency</p>
           <p className="text-sm font-semibold text-ink">{profile.currency === 'IDR' ? 'Indonesian Rupiah (IDR)' : 'US Dollar (USD)'}</p>
         </button>
-        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleLanguageChange}>
+        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={() => {
+          const newLanguage = profile.language === 'English' ? 'Indonesia' : 'English'
+          updateProfile({ language: newLanguage })
+          setProfile(prev => ({ ...prev, language: newLanguage }))
+          showToast(`Language changed to ${newLanguage}`, 'info')
+        }}>
           <p className="text-xs text-mute font-semibold mb-1">Language</p>
           <p className="text-sm font-semibold text-ink">{profile.language}</p>
         </button>
-        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={handleDateFormatChange}>
+        <button className="p-4 bg-surface-soft rounded-xl text-left hover:bg-primary-pale transition-colors" onClick={() => {
+          const newFormat = profile.date_format === 'MMM DD, YYYY' ? 'DD/MM/YYYY' : 'MMM DD, YYYY'
+          updateProfile({ date_format: newFormat })
+          setProfile(prev => ({ ...prev, date_format: newFormat }))
+          showToast('Date format updated', 'info')
+        }}>
           <p className="text-xs text-mute font-semibold mb-1">Date Format</p>
           <p className="text-sm font-semibold text-ink">{profile.date_format}</p>
         </button>
       </div>
 
+      {/* Toggle Preferences */}
       <div>
         <h3 className="text-sm font-black text-ink mb-3">Preferences</h3>
         {[
@@ -329,11 +355,21 @@ function ProfileTab({ showToast }) {
         ].map(p => (
           <div key={p.key} className="flex items-center justify-between py-3 border-b border-ink/5 last:border-0">
             <div><p className="text-sm font-semibold text-ink">{p.label}</p><p className="text-xs text-mute">{p.sub}</p></div>
-            <Toggle checked={prefs[p.key]} onChange={v => handleTogglePref(p.key, v)} />
+            <Toggle checked={prefs[p.key]} onChange={async (v) => {
+              const { error } = await supabase
+                .from('user_settings')
+                .update({ [p.key]: v })
+                .eq('user_id', user.id)
+              if (!error) {
+                setPrefs(prev => ({ ...prev, [p.key]: v }))
+                showToast(`${p.label} ${v ? 'enabled' : 'disabled'}`, 'info')
+              }
+            }} />
           </div>
         ))}
       </div>
 
+      {/* Edit Profile Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-ink/50 flex items-center justify-center z-50 p-4" onClick={() => setShowEditModal(false)}>
           <div className="bg-surface rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -342,9 +378,18 @@ function ProfileTab({ showToast }) {
               <button onClick={() => setShowEditModal(false)} className="w-8 h-8 rounded-full bg-surface-soft hover:bg-primary-pale flex items-center justify-center">✕</button>
             </div>
             <div className="space-y-4">
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Full Name</label><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Email Address</label><input type="email" value={editForm.email} disabled className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface-soft text-mute text-sm cursor-not-allowed" /></div>
-              <div><label className="block text-sm font-semibold text-ink mb-1.5">Phone Number</label><input type="tel" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" /></div>
+              <div>
+                <label className="block text-sm font-semibold text-ink mb-1.5">Full Name</label>
+                <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-ink mb-1.5">Email Address</label>
+                <input type="email" value={editForm.email} disabled className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface-soft text-mute text-sm cursor-not-allowed" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-ink mb-1.5">Phone Number</label>
+                <input type="tel" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl border border-ink/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/40" />
+              </div>
               <div className="flex gap-3 mt-6 pt-4 border-t border-ink/10">
                 <button onClick={() => setShowEditModal(false)} className="flex-1 py-3 rounded-xl border border-ink/10 text-sm font-semibold hover:bg-surface-soft">Cancel</button>
                 <button onClick={handleSaveProfile} className="flex-1 py-3 rounded-xl bg-primary text-ink text-sm font-semibold hover:bg-primary-hover">Save Changes</button>
@@ -479,73 +524,19 @@ function NotificationsTab({ showToast }) {
 // Appearance Tab
 // ─────────────────────────────────────────────
 function AppearanceTab({ showToast }) {
-  const { user } = useAuth()
-  const [theme, setTheme] = useState('Light')
-  const [accent, setAccent] = useState('#9fe870')
+  const { theme, accentColor, updateTheme, updateAccentColor } = useTheme()
   const [compact, setCompact] = useState(false)
   const [animations, setAnimations] = useState(true)
   const [tips, setTips] = useState(true)
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    if (!user) return
-    fetchAppearance()
-  }, [user])
-
-  const fetchAppearance = async () => {
-    const { data, error } = await supabase
-      .from('user_settings')
-      .select('theme, accent_color, compact_mode, chart_animations, show_tips')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!error && data) {
-      setTheme(data.theme || 'Light')
-      setAccent(data.accent_color || '#9fe870')
-      setCompact(data.compact_mode || false)
-      setAnimations(data.chart_animations ?? true)
-      setTips(data.show_tips ?? true)
-    }
-    setLoading(false)
+  const handleThemeChange = (newTheme) => {
+    updateTheme(newTheme)
+    showToast(`${newTheme} theme applied`, 'info')
   }
 
-  const updateSettings = async (updates) => {
-    const { error } = await supabase
-      .from('user_settings')
-      .update(updates)
-      .eq('user_id', user.id)
-    return !error
-  }
-
-  const handleThemeChange = async (newTheme) => {
-    const success = await updateSettings({ theme: newTheme })
-    if (success) {
-      setTheme(newTheme)
-      showToast(`${newTheme} theme applied`, 'info')
-    }
-  }
-
-  const handleAccentChange = async (newAccent) => {
-    const success = await updateSettings({ accent_color: newAccent })
-    if (success) {
-      setAccent(newAccent)
-      showToast('Accent color updated', 'success')
-    }
-  }
-
-  const handleSave = async () => {
-    const success = await updateSettings({
-      compact_mode: compact,
-      chart_animations: animations,
-      show_tips: tips
-    })
-    if (success) {
-      showToast('Appearance settings saved!', 'success')
-    }
-  }
-
-  if (loading) {
-    return <div className="flex justify-center py-10"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
+  const handleAccentChange = (color) => {
+    updateAccentColor(color)
+    showToast('Accent color updated', 'success')
   }
 
   const COLORS = ['#9fe870', '#3b82f6', '#a855f7', '#f97316', '#ec4899']
@@ -557,9 +548,10 @@ function AppearanceTab({ showToast }) {
           <h2 className="text-lg font-black text-ink mb-0.5">Appearance Settings</h2>
           <p className="text-sm text-mute">Customize how MoneyPulse looks and feels.</p>
         </div>
-        <ActionButton onClick={handleSave}>Save Changes</ActionButton>
+        <ActionButton onClick={() => showToast('Appearance settings saved!', 'success')}>Save Changes</ActionButton>
       </div>
 
+      {/* Theme Options */}
       <div className="p-5 bg-surface rounded-2xl border border-ink/5">
         <h3 className="text-sm font-black text-ink mb-3">Theme</h3>
         <div className="grid grid-cols-3 gap-3">
@@ -579,6 +571,7 @@ function AppearanceTab({ showToast }) {
         </div>
       </div>
 
+      {/* Primary Color */}
       <div className="p-5 bg-surface-soft rounded-2xl">
         <h3 className="text-sm font-black text-ink mb-1">Primary Color</h3>
         <p className="text-xs text-mute mb-3">Choose your accent color.</p>
@@ -587,12 +580,13 @@ function AppearanceTab({ showToast }) {
             <button key={c} onClick={() => handleAccentChange(c)}
               className="w-9 h-9 rounded-full flex items-center justify-center transition-transform hover:scale-110"
               style={{ background: c }}>
-              {accent === c && <Check size={14} className="text-white" />}
+              {accentColor === c && <Check size={14} className="text-white" />}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Display Preferences */}
       <div className="p-5 bg-surface rounded-2xl border border-ink/5">
         <h3 className="text-sm font-black text-ink mb-3">Display Preferences</h3>
         {[

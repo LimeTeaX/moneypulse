@@ -1,6 +1,44 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+:root {
+  --color-primary: #9fe870;
+  --color-primary-hover: #cdffad;
+  --color-primary-pale: #e2f6d5;
+  --color-surface: #ffffff;
+  --color-surface-soft: #e8ebe6;
+  --color-ink: #0e0f0c;
+  --color-body: #454745;
+  --color-mute: #868685;
+  --color-positive: #2ead4b;
+  --color-danger: #d03238;
+  --color-border: rgba(14, 15, 12, 0.08);
+}
+
+.dark {
+  --color-primary: #9fe870;
+  --color-primary-hover: #cdffad;
+  --color-primary-pale: rgba(159, 232, 112, 0.15);
+  --color-surface: #1a1f1e;
+  --color-surface-soft: #0f1412;
+  --color-ink: #edf2f0;
+  --color-body: #a8b3b0;
+  --color-mute: #6b7a76;
+  --color-border: rgba(237, 242, 240, 0.08);
+  --color-positive: #4ade80;
+  --color-danger: #f87171;
+}
+
+* { box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-surface-soft);
+  color: var(--color-body);
+}
+
 @theme {
   --color-primary: #9fe870;
   --color-primary-hover: #cdffad;
@@ -68,4 +106,23 @@
 
 button, a, [role="button"], .clickable {
   cursor: pointer;
+}
+
+/* Toast notification dark mode support */
+.toast-success {
+  background-color: var(--color-surface);
+  border-color: var(--color-positive);
+  color: var(--color-ink);
+}
+
+.toast-error {
+  background-color: var(--color-surface);
+  border-color: var(--color-danger);
+  color: var(--color-ink);
+}
+
+.toast-info {
+  background-color: var(--color-surface);
+  border-color: var(--color-primary);
+  color: var(--color-ink);
 }
