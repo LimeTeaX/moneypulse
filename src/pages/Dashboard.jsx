@@ -13,6 +13,7 @@ import {
   Badge, Card, IconTile, ActionButton, Modal,
   FormGroup, Input, Select, RoundIconButton
 } from '../components/common'
+import { Toast, useToast } from '../components/common/Toast'
 import { useTransactions } from '../hooks/useTransactions'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -28,19 +29,22 @@ function AddTransactionModal({ isOpen, onClose, onAdd }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formName || !formAmount) return alert('Please fill in name and amount')
+    if (!formName || !formAmount) {
+      alert('Please fill in name and amount')
+      return
+    }
     const amountNum = parseFloat(formAmount)
-    if (isNaN(amountNum) || amountNum <= 0) return alert('Please enter a valid amount')
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert('Please enter a valid amount')
+      return
+    }
     const finalAmount = formType === 'expense' ? -Math.abs(amountNum) : Math.abs(amountNum)
     onAdd({
-      id: Date.now().toString(),
       name: formName,
       detail: formDetail || '',
       category: formType === 'income' ? 'Income' : 'Other',
       date: new Date().toISOString().split('T')[0],
-      formattedDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       amount: finalAmount,
-      formattedAmount: `${finalAmount > 0 ? '+' : '-'}Rp${Math.abs(finalAmount).toLocaleString('id-ID')}`,
       positive: finalAmount > 0,
     })
     onClose()
@@ -134,11 +138,27 @@ function EditGoalModal({ isOpen, onClose, onSave, currentTarget, currentName }) 
 // ─────────────────────────────────────────────
 export default function DashboardPage({ onNavigate }) {
   const { user } = useAuth()
+  const { toast, showToast, hideToast } = useToast()
   const { transactions, addTransaction, deleteTransaction, loading } = useTransactions()
   const [showModal, setShowModal] = useState(false)
   const [isEditGoalOpen, setIsEditGoalOpen] = useState(false)
   const [savingsTarget, setSavingsTarget] = useState(10000000)
   const [savingsName, setSavingsName] = useState('Emergency Fund')
+
+  // Helper functions for formatting
+  const formatDate = (dateString) => {
+    if (!dateString) return 'No date'
+    return new Date(dateString).toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    })
+  }
+
+  const formatAmount = (amount, isPositive) => {
+    if (amount === undefined || amount === null) return 'Rp0'
+    return `${isPositive ? '+' : '-'}Rp${Math.abs(amount).toLocaleString('id-ID')}`
+  }
 
   // ─── Fetch savings goal from Supabase ───
   useEffect(() => {
@@ -168,6 +188,9 @@ export default function DashboardPage({ onNavigate }) {
     if (!error) {
       setSavingsTarget(target)
       setSavingsName(name)
+      showToast('Savings goal updated!', 'success')
+    } else {
+      showToast('Failed to update savings goal', 'error')
     }
   }
 
@@ -204,7 +227,7 @@ export default function DashboardPage({ onNavigate }) {
   }
 
   // ─── Calculate all stats from real data ───
-  const totalBalance = transactions?.reduce((s, t) => s + (t.amount || 0), 0) || 0
+  const totalBalance = transactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
   const savingsPercentage = Math.min(100, Math.round((totalBalance / savingsTarget) * 100))
   
   const monthlyTotals = calculateMonthlyTotals(transactions || [])
@@ -234,6 +257,7 @@ export default function DashboardPage({ onNavigate }) {
 
   const handleAdd = async (newTransaction) => {
     await addTransaction(newTransaction)
+    showToast('Transaction added successfully!', 'success')
   }
 
   const handleEditGoal = () => {
@@ -254,7 +278,10 @@ export default function DashboardPage({ onNavigate }) {
 
   return (
     <>
-      {/* ─── Hero Section ────────────────────────────────────────── */}
+      {/* Toast Notification */}
+      <Toast isOpen={toast.isOpen} message={toast.message} type={toast.type} onClose={hideToast} />
+
+      {/* Hero Section */}
       <section className="bg-surface rounded-2xl p-8">
         <p className="text-xs font-black uppercase tracking-widest text-primary mb-3">Financial Overview</p>
         <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-3">
@@ -269,7 +296,7 @@ export default function DashboardPage({ onNavigate }) {
         </div>
       </section>
 
-      {/* ─── Feature Grid: Available Balance + Savings Goal ────────── */}
+      {/* Feature Grid: Available Balance + Savings Goal */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Available Balance Card */}
@@ -309,7 +336,7 @@ export default function DashboardPage({ onNavigate }) {
         </Card>
       </div>
 
-      {/* ─── Stats Grid ────────────────────────────────────────────── */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map(item => (
           <Card key={item.title}>
@@ -326,7 +353,7 @@ export default function DashboardPage({ onNavigate }) {
         ))}
       </div>
 
-      {/* ─── Transaction Table ──────────────────────────────────────── */}
+      {/* Transaction Table */}
       <Card>
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -349,36 +376,45 @@ export default function DashboardPage({ onNavigate }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-ink/5">
-              {latest.map(t => (
-                <tr key={t.id} className="hover:bg-surface-soft/60 transition-colors cursor-pointer" onClick={() => onNavigate?.('Transactions')}>
-                  <td className="py-3.5 pr-4">
-                    <div className="flex items-center gap-3">
-                      <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'gray'} size={16} />
-                      <div>
-                        <p className="text-sm font-semibold text-ink">{t.name}</p>
-                        <p className="text-xs text-mute">{t.detail}</p>
+              {latest.map(t => {
+                const txDate = formatDate(t.date)
+                const txAmount = formatAmount(t.amount, t.positive)
+                
+                return (
+                  <tr key={t.id} className="hover:bg-surface-soft/60 transition-colors cursor-pointer" onClick={() => onNavigate?.('Transactions')}>
+                    <td className="py-3.5 pr-4">
+                      <div className="flex items-center gap-3">
+                        <IconTile icon={t.positive ? ArrowUpRight : ArrowDownRight} tone={t.positive ? 'green' : 'gray'} size={16} />
+                        <div>
+                          <p className="text-sm font-semibold text-ink">{t.name || 'Unnamed'}</p>
+                          {t.detail && <p className="text-xs text-mute">{t.detail}</p>}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="py-3.5 pr-4"><Badge tone={t.positive ? 'green' : 'gray'}>{t.category}</Badge></td>
-                  <td className="py-3.5 pr-4 text-sm text-body">{t.formattedDate}</td>
-                  <td className={`py-3.5 text-right text-sm font-semibold ${t.positive ? 'text-positive' : 'text-ink'}`}>
-                    {t.formattedAmount}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-3.5 pr-4">
+                      <Badge tone={t.positive ? 'green' : 'gray'}>{t.category || 'Uncategorized'}</Badge>
+                    </td>
+                    <td className="py-3.5 pr-4 text-sm text-body">{txDate}</td>
+                    <td className={`py-3.5 text-right text-sm font-semibold ${t.positive ? 'text-positive' : 'text-ink'}`}>
+                      {txAmount}
+                    </td>
+                  </tr>
+                )
+              })}
               {latest.length === 0 && (
-                <tr><td colSpan={4} className="text-center py-12 text-mute text-sm">No transactions yet</td></tr>
+                <tr>
+                  <td colSpan={4} className="text-center py-12 text-mute text-sm">No transactions yet</td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {/* ─── Add Transaction Modal ──────────────────────────────────── */}
+      {/* Add Transaction Modal */}
       <AddTransactionModal isOpen={showModal} onClose={() => setShowModal(false)} onAdd={handleAdd} />
 
-      {/* ─── Edit Savings Goal Modal ────────────────────────────────── */}
+      {/* Edit Savings Goal Modal */}
       <EditGoalModal 
         isOpen={isEditGoalOpen}
         onClose={() => setIsEditGoalOpen(false)}
