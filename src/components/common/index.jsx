@@ -2,16 +2,7 @@ import { useEffect } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 
 export function Modal({ isOpen, onClose, title, children }) {
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = 'unset'
-    }
-    return () => {
-      document.body.style.overflow = 'unset'
-    }
-  }, [isOpen])
+  // Hapus useEffect yang lock body scroll
 
   if (!isOpen) return null
 
