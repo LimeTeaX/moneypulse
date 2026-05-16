@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { ArrowRight, X } from 'lucide-react'
 
-export function Modal({ isOpen, onClose, title, children, type = 'default' }) {
+export function Modal({ isOpen, onClose, title, children }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
@@ -17,24 +17,20 @@ export function Modal({ isOpen, onClose, title, children, type = 'default' }) {
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-9999 p-4" 
+      className="fixed inset-0 flex items-center justify-center z-9999 p-4" 
       onClick={onClose}
     >
       <div 
-        className="rounded-2xl w-full max-w-md shadow-2xl flex flex-col"
-        style={{ 
-          backgroundColor: 'var(--color-surface)',
-          maxHeight: '85vh'
-        }} 
+        className="rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl"
+        style={{ backgroundColor: 'var(--color-surface)' }} 
         onClick={e => e.stopPropagation()}
       >
-        {/* Header - tetap di atas */}
-        <div className="shrink-0 px-6 py-4 border-b" style={{ borderColor: 'var(--color-border)' }}>
+        <div className="sticky top-0 z-10 px-6 py-4 border-b" style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black tracking-tight" style={{ color: 'var(--color-ink)' }}>{title}</h2>
             <button 
               onClick={onClose} 
-              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer"
+              className="w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 cursor-pointer"
               style={{ backgroundColor: 'var(--color-surface-soft)' }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-primary-pale)'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--color-surface-soft)'}
@@ -43,11 +39,7 @@ export function Modal({ isOpen, onClose, title, children, type = 'default' }) {
             </button>
           </div>
         </div>
-        
-        {/* Content - bisa di-scroll */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {children}
-        </div>
+        <div className="px-6 py-4">{children}</div>
       </div>
     </div>
   )
