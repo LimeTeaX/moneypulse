@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
-import { useTheme } from './contexts/ThemeContext'
 import Sidebar from './components/layout/Sidebar'
 import LandingPage from './pages/Landing'
 import AuthPage from './pages/Auth'
@@ -14,24 +13,29 @@ import RecurringPage from './pages/Recurring'
 import AIAssistantPage from './pages/AIAssistant'
 import SettingsPage from './pages/Settings'
 
-// Layout untuk halaman yang butuh sidebar
 function DashboardLayout({ children, activePage, onNavigate }) {
-  const { theme } = useTheme()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--color-surface-soft)' }}>
-      <div className="flex gap-6 p-6 max-w-350 mx-auto">
-        <Sidebar activePage={activePage} onNavigate={onNavigate} />
-        <main className="flex-1 min-w-0">
-          <div className="flex flex-col gap-6 animate-fade-in">
-            {children}
+    <div className="min-h-screen bg-surface-soft">
+      <div className="flex">
+        <Sidebar 
+          activePage={activePage} 
+          onNavigate={onNavigate}
+          isCollapsed={isSidebarCollapsed}
+          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
+        <main className={`flex-1 min-w-0 transition-all duration-300 ${isSidebarCollapsed ? 'ml-0' : ''}`}>
+          <div className="p-6">
+            <div className="flex flex-col gap-6 animate-fade-in max-w-350 mx-auto">
+              {children}
+            </div>
           </div>
         </main>
       </div>
     </div>
   )
 }
-
 export default function App() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()

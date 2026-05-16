@@ -245,6 +245,39 @@ export default function TransactionsPage({ onNavigate }) {
   const filtered = filterTransactions(formattedTransactions, filters)
   const displayed = searchTransactions(filtered, searchTerm)
 
+  // ─── Hitung income dan expense realtime dari data Supabase ───
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1
+  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
+
+  // Income bulan ini vs bulan lalu
+  let currentMonthIncome = 0
+  let lastMonthIncome = 0
+  let currentMonthExpense = 0
+  let lastMonthExpense = 0
+
+  transactions.forEach(t => {
+    const date = new Date(t.date)
+    if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
+      if (t.positive) currentMonthIncome += t.amount
+      else currentMonthExpense += Math.abs(t.amount)
+    }
+    if (date.getMonth() === lastMonth && date.getFullYear() === lastMonthYear) {
+      if (t.positive) lastMonthIncome += t.amount
+      else lastMonthExpense += Math.abs(t.amount)
+    }
+  })
+
+  const incomeChange = lastMonthIncome === 0 
+    ? (currentMonthIncome > 0 ? 100 : 0)
+    : ((currentMonthIncome - lastMonthIncome) / lastMonthIncome) * 100
+
+  const expenseChange = lastMonthExpense === 0
+    ? (currentMonthExpense > 0 ? 100 : 0)
+    : ((currentMonthExpense - lastMonthExpense) / lastMonthExpense) * 100
+
   const totalIncome = transactions.filter(t => t.positive).reduce((s, t) => s + t.amount, 0)
   const totalExpense = Math.abs(transactions.filter(t => !t.positive).reduce((s, t) => s + t.amount, 0))
   const savingsRate = totalIncome > 0 ? Math.round(((totalIncome - totalExpense) / totalIncome) * 100) : 0
@@ -302,8 +335,21 @@ export default function TransactionsPage({ onNavigate }) {
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <MetricCard icon={TrendingUp} title="Total Income" value={`Rp${totalIncome.toLocaleString('id-ID')}`} change="+8.1%" note="this month" />
-        <MetricCard icon={TrendingDown} title="Total Expenses" value={`Rp${totalExpense.toLocaleString('id-ID')}`} change="-2.4%" note="this month" tone="red" />
+        <MetricCard 
+          icon={TrendingUp} 
+          title="Total Income" 
+          value={`Rp${totalIncome.toLocaleString('id-ID')}`} 
+          change={`${incomeChange >= 0 ? '+' : ''}${incomeChange.toFixed(1)}%`} 
+          note="vs last month" 
+        />
+        <MetricCard 
+          icon={TrendingDown} 
+          title="Total Expenses" 
+          value={`Rp${totalExpense.toLocaleString('id-ID')}`} 
+          change={`${expenseChange >= 0 ? '+' : ''}${expenseChange.toFixed(1)}%`} 
+          note="vs last month" 
+          tone="red" 
+        />
         <Card>
           <div className="flex items-start justify-between mb-3">
             <div>

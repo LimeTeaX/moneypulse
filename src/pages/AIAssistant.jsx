@@ -1,7 +1,7 @@
 // src/pages/AIAssistant.jsx
 // ─────────────────────────────────────────────
 // AI Assistant — powered by Groq API (Strict Finance Only)
-// Connected to Supabase for real transaction data
+// ALL DATA FROM SUPABASE — NO HARDCODE
 // ─────────────────────────────────────────────
 
 import { useState, useRef, useEffect } from 'react'
@@ -32,10 +32,54 @@ const QUICK_ACTIONS = [
 ]
 
 // ─────────────────────────────────────────────
+// Helper: Calculate percentage change
+// ─────────────────────────────────────────────
+const calculatePercentageChange = (current, previous) => {
+  if (previous === 0) return current > 0 ? 100 : 0
+  return ((current - previous) / previous) * 100
+}
+
+// ─────────────────────────────────────────────
+// Helper: Get last month totals
+// ─────────────────────────────────────────────
+const getLastMonthComparison = (transactions) => {
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1
+  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
+
+  let currentIncome = 0
+  let lastIncome = 0
+  let currentExpense = 0
+  let lastExpense = 0
+
+  transactions?.forEach(t => {
+    const date = new Date(t.date)
+    if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
+      if (t.positive) currentIncome += t.amount
+      else currentExpense += Math.abs(t.amount)
+    }
+    if (date.getMonth() === lastMonth && date.getFullYear() === lastMonthYear) {
+      if (t.positive) lastIncome += t.amount
+      else lastExpense += Math.abs(t.amount)
+    }
+  })
+
+  return {
+    currentIncome,
+    lastIncome,
+    currentExpense,
+    lastExpense,
+    incomeChange: calculatePercentageChange(currentIncome, lastIncome),
+    expenseChange: calculatePercentageChange(currentExpense, lastExpense)
+  }
+}
+
+// ─────────────────────────────────────────────
 // Call Groq API (Strict Finance Only)
 // ─────────────────────────────────────────────
 async function callGroq(messages, transactions, totalBalance, monthlyIncome, monthlyExpense) {
-  // Build financial context from real user data
   const categories = {}
   transactions?.filter(t => !t.positive).forEach(t => {
     categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
@@ -60,8 +104,7 @@ ${transactions?.slice(0, 5).map(t => `- ${t.name}: ${t.positive ? '+' : '-'}Rp${
 
 🔒 STRICT RULES (MUST FOLLOW):
 1. ONLY answer questions about personal finance, budgeting, saving, investing, and money management
-2. If user asks about CODING, PROGRAMMING, or any NON-FINANCE topic, politely DECLINE and redirect:
-   → "I'm a financial assistant and can only help with finance-related questions. Please ask me about budgeting, saving, or investing!"
+2. If user asks about CODING, PROGRAMMING, or any NON-FINANCE topic, politely DECLINE and redirect
 3. ALWAYS use the financial data above to give personalized advice
 4. Use Indonesian Rupiah (IDR) for all amounts
 5. Keep responses concise (2-4 sentences max) and actionable
@@ -95,12 +138,12 @@ ${financialContext}`
     return data.choices[0].message.content
   } catch (error) {
     console.error('Groq API error:', error)
-    return "I'm having trouble connecting right now. Please check your API key and try again. Make sure VITE_GROQ_API_KEY is set in your .env file."
+    return "I'm having trouble connecting right now. Please check your API key in the .env file."
   }
 }
 
 // ─────────────────────────────────────────────
-// Message bubble with copy & typing effect
+// Message bubble with copy
 // ─────────────────────────────────────────────
 function MessageBubble({ msg, onCopy }) {
   const isUser = msg.role === 'user'
@@ -161,7 +204,7 @@ function StatCard({ label, value, note, icon: Icon, tone = 'green' }) {
 }
 
 // ─────────────────────────────────────────────
-// Main AI Assistant Page
+// Main AI Assistant Page — NO HARDCODE
 // ─────────────────────────────────────────────
 export default function AIAssistantPage() {
   const { user } = useAuth()
@@ -169,7 +212,7 @@ export default function AIAssistantPage() {
   const [messages, setMessages] = useState([
     { 
       role: 'assistant', 
-      content: 'Hi! I\'m your MoneyPulse AI assistant powered by **Groq**. I can see your financial data and give you personalized advice.\n\nAsk me anything about your budget, savings goals, or spending patterns!' 
+      content: 'Hi! I\'m your MoneyPulse AI assistant. I can see your financial data and give you personalized advice.\n\nAsk me anything about your budget, savings goals, or spending patterns!' 
     }
   ])
   const [input, setInput] = useState('')
@@ -177,14 +220,26 @@ export default function AIAssistantPage() {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
-  // Calculate financial stats from real data
+  // ─── Calculate financial stats from REAL Supabase data ───
   const totalBalance = transactions?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
   const monthlyIncome = transactions?.filter(t => t.positive).reduce((sum, t) => sum + (t.amount || 0), 0) || 0
   const monthlyExpense = Math.abs(transactions?.filter(t => !t.positive).reduce((sum, t) => sum + (t.amount || 0), 0) || 0)
   const savingsRate = monthlyIncome > 0 ? Math.round(((monthlyIncome - monthlyExpense) / monthlyIncome) * 100) : 0
   const questionsCount = messages.filter(m => m.role === 'user').length
 
-  // Auto scroll & focus
+  // ─── Calculate real percentage changes from last month ───
+  const { incomeChange, expenseChange } = getLastMonthComparison(transactions)
+
+  // ─── Get top spending category from REAL data ───
+  const categories = {}
+  transactions?.filter(t => !t.positive).forEach(t => {
+    categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
+  })
+  const topCategory = Object.entries(categories).sort((a, b) => b[1] - a[1])[0]
+  const topCategoryName = topCategory?.[0] || 'No data'
+  const topCategoryAmount = topCategory?.[1] || 0
+
+  // ─── Auto scroll ───
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
@@ -192,13 +247,6 @@ export default function AIAssistantPage() {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
-
-  // Get top spending category
-  const categories = {}
-  transactions?.filter(t => !t.positive).forEach(t => {
-    categories[t.category] = (categories[t.category] || 0) + Math.abs(t.amount)
-  })
-  const topCategory = Object.entries(categories).sort((a, b) => b[1] - a[1])[0]
 
   // ─── Send message to Groq ──────────────────
   const sendMessage = async (text) => {
@@ -226,7 +274,6 @@ export default function AIAssistantPage() {
     }
   }
 
-  // ─── Utilities ─────────────────────────────
   const clearChat = () => {
     if (confirm('Clear all conversation history?')) {
       setMessages([{ 
@@ -264,39 +311,37 @@ export default function AIAssistantPage() {
           <h1 className="text-4xl lg:text-5xl font-black tracking-tight text-ink leading-none mb-2">Your smart financial<br />assistant.</h1>
           <p className="text-base text-body">Powered by Groq • Instant responses • Real financial insights</p>
         </div>
-        <ActionButton icon={Trash2} variant="outline" onClick={clearChat}>
-          Clear Chat
-        </ActionButton>
+        <ActionButton icon={Trash2} variant="outline" onClick={clearChat}>Clear Chat</ActionButton>
       </div>
 
-      {/* Stats Row — based on real data */}
+      {/* Stats Row — ALL REAL DATA, NO HARDCODE */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           label="Monthly Income" 
           value={`Rp${monthlyIncome.toLocaleString('id-ID')}`} 
-          note="+8.1% vs last month" 
+          note={`${incomeChange >= 0 ? '+' : ''}${incomeChange.toFixed(1)}% vs last month`} 
           icon={TrendingUp} 
-          tone="green" 
+          tone={incomeChange >= 0 ? 'green' : 'red'} 
         />
         <StatCard 
           label="Monthly Expense" 
           value={`Rp${monthlyExpense.toLocaleString('id-ID')}`} 
-          note="-2.4% vs last month" 
+          note={`${expenseChange >= 0 ? '+' : ''}${expenseChange.toFixed(1)}% vs last month`} 
           icon={TrendingUp} 
-          tone="red" 
+          tone={expenseChange <= 0 ? 'green' : 'red'} 
         />
         <StatCard 
           label="Savings Rate" 
           value={`${savingsRate}%`} 
-          note={savingsRate > 30 ? 'Excellent!' : 'Room to improve'} 
+          note={savingsRate > 30 ? 'Excellent!' : savingsRate > 15 ? 'Good progress' : 'Room to improve'} 
           icon={Target} 
-          tone="purple" 
+          tone={savingsRate > 20 ? 'green' : 'orange'} 
         />
         <StatCard 
-          label="Questions Asked" 
-          value={String(questionsCount)} 
-          note="This session" 
-          icon={Bot} 
+          label="Top Category" 
+          value={topCategoryName} 
+          note={`Rp${topCategoryAmount.toLocaleString('id-ID')} spent`} 
+          icon={BarChart3} 
           tone="blue" 
         />
       </div>
@@ -305,12 +350,9 @@ export default function AIAssistantPage() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Chat Panel */}
         <Card className="lg:col-span-3 flex flex-col" style={{ height: '560px' }}>
-          {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-ink/5 shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-ink font-black text-sm">
-                AI
-              </div>
+              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-ink font-black text-sm">AI</div>
               <div>
                 <p className="text-sm font-black text-ink">MoneyPulse Assistant</p>
                 <p className="text-xs text-mute">Groq • Llama 3.1 • Instant</p>
@@ -319,7 +361,6 @@ export default function AIAssistantPage() {
             <Badge tone="green">Online</Badge>
           </div>
 
-          {/* Messages */}
           <div className="flex-1 overflow-y-auto py-4 px-2 space-y-1" style={{ maxHeight: '420px' }}>
             {messages.map((msg, i) => (
               <MessageBubble key={i} msg={msg} onCopy={handleCopy} />
@@ -336,7 +377,6 @@ export default function AIAssistantPage() {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
           <div className="mt-auto pt-4 border-t border-ink/5 shrink-0">
             <div className="flex items-center gap-2 bg-surface-soft rounded-xl px-4 py-3">
               <input
@@ -357,15 +397,13 @@ export default function AIAssistantPage() {
                 <Send size={15} />
               </button>
             </div>
-            <p className="text-xs text-mute mt-2 text-center">
-              Powered by Groq • Responses use your actual financial data
-            </p>
+            <p className="text-xs text-mute mt-2 text-center">Powered by Groq • Responses use your actual financial data</p>
           </div>
         </Card>
 
         {/* Right Panel */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          {/* AI Insight Card — dynamic based on real data */}
+          {/* AI Insight Card — REAL DATA */}
           <div className="bg-ink rounded-2xl p-6">
             <p className="text-xs font-black uppercase tracking-widest text-primary mb-4">AI Insight</p>
             <div className="flex items-start gap-4 mb-6">

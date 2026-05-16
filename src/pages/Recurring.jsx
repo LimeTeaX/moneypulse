@@ -1,9 +1,3 @@
-// src/pages/Recurring.jsx
-// ─────────────────────────────────────────────
-// Recurring payments — Full CRUD with Supabase
-// Add, edit, delete, toggle status, filter, search, review modal
-// ─────────────────────────────────────────────
-
 import { useState, useEffect } from 'react'
 import { 
   Plus, Filter, Search, MoreHorizontal, RefreshCw, Clock, 
@@ -278,7 +272,7 @@ export default function RecurringPage() {
     fetchRecurring()
   }, [user])
 
-  // ─── Statistics from real data ───
+  // ─── Statistics from real data (ALL REALTIME) ───
   const activeItems = items.filter(i => i.status === 'active')
   const totalMonthly = activeItems.reduce((s, i) => s + i.amount, 0)
   const activeCount = activeItems.length
@@ -289,6 +283,70 @@ export default function RecurringPage() {
     return diffDays <= 7 && diffDays >= 0
   }).length
   const annualAmount = totalMonthly * 12
+
+  // ─── Calculate percentage changes (REALTIME) ───
+  const calculatePercentageChange = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0
+    return ((current - previous) / previous) * 100
+  }
+
+  const now = new Date()
+  const currentMonth = now.getMonth()
+  const currentYear = now.getFullYear()
+  const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1
+  const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear
+
+  let currentMonthTotal = 0
+  let lastMonthTotal = 0
+
+  activeItems.forEach(item => {
+    const paymentDate = new Date(item.next_payment)
+    if (paymentDate.getMonth() === currentMonth && paymentDate.getFullYear() === currentYear) {
+      currentMonthTotal += item.amount
+    }
+    if (paymentDate.getMonth() === lastMonth && paymentDate.getFullYear() === lastMonthYear) {
+      lastMonthTotal += item.amount
+    }
+  })
+
+  const monthlyChange = calculatePercentageChange(currentMonthTotal, lastMonthTotal)
+  
+  // Active count change (compare with last month's active count)
+  let lastMonthActiveCount = 0
+  activeItems.forEach(item => {
+    const createdAt = new Date(item.created_at)
+    if (createdAt.getMonth() === lastMonth && createdAt.getFullYear() === lastMonthYear) {
+      lastMonthActiveCount++
+    }
+  })
+  const activeCountChange = calculatePercentageChange(activeCount, lastMonthActiveCount)
+
+  // Due count change
+  let lastMonthDueCount = 0
+  activeItems.forEach(item => {
+    const nextDate = new Date(item.next_payment)
+    if (nextDate.getMonth() === lastMonth && nextDate.getFullYear() === lastMonthYear) {
+      const diffDays = Math.ceil((nextDate - new Date()) / (1000 * 60 * 60 * 24))
+      if (diffDays <= 7 && diffDays >= 0) {
+        lastMonthDueCount++
+      }
+    }
+  })
+  const dueCountChange = calculatePercentageChange(dueCount, lastMonthDueCount)
+
+  // Annual change (compare total monthly with last year average)
+  const monthlyAverage = activeItems.length > 0 ? totalMonthly / activeItems.length : 0
+  let lastYearAverage = 0
+  let lastYearCount = 0
+  activeItems.forEach(item => {
+    const createdAt = new Date(item.created_at)
+    if (createdAt.getFullYear() === currentYear - 1) {
+      lastYearAverage += item.amount
+      lastYearCount++
+    }
+  })
+  lastYearAverage = lastYearCount > 0 ? lastYearAverage / lastYearCount : 0
+  const annualChange = calculatePercentageChange(monthlyAverage, lastYearAverage)
 
   // ─── Filter logic ───
   const filteredItems = items.filter(item => {
@@ -463,7 +521,7 @@ export default function RecurringPage() {
         <ActionButton icon={Plus} onClick={() => { setEditingItem(null); setIsAddModalOpen(true) }}>Add Recurring</ActionButton>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - ALL REALTIME NO HARDCODE */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="flex items-start justify-between mb-2">
@@ -471,31 +529,42 @@ export default function RecurringPage() {
             <IconTile icon={RefreshCw} tone="green" size={16} />
           </div>
           <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p>
-          <Badge tone="green">-4.2% vs last month</Badge>
+          <Badge tone={monthlyChange >= 0 ? 'green' : 'red'}>
+            {monthlyChange >= 0 ? '+' : ''}{monthlyChange.toFixed(1)}% vs last month
+          </Badge>
         </Card>
+        
         <Card>
           <div className="flex items-start justify-between mb-2">
             <p className="text-xs text-mute font-semibold">Active Subscriptions</p>
             <IconTile icon={TrendingUp} tone="green" size={16} />
           </div>
           <p className="text-xl font-black tracking-tight text-ink mb-1">{activeCount}</p>
-          <Badge tone="green">No change</Badge>
+          <Badge tone={activeCountChange >= 0 ? 'green' : 'red'}>
+            {activeCountChange >= 0 ? '+' : ''}{activeCountChange.toFixed(1)}% vs last month
+          </Badge>
         </Card>
+        
         <Card>
           <div className="flex items-start justify-between mb-2">
             <p className="text-xs text-mute font-semibold">Due This Month</p>
             <IconTile icon={Clock} tone="orange" size={16} />
           </div>
-          <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(totalMonthly)}</p>
-          <Badge tone="orange">{dueCount} payments due soon</Badge>
+          <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(currentMonthTotal)}</p>
+          <Badge tone={dueCountChange >= 0 ? 'orange' : 'green'}>
+            {dueCountChange >= 0 ? '+' : ''}{dueCountChange.toFixed(1)}% vs last month
+          </Badge>
         </Card>
+        
         <Card>
           <div className="flex items-start justify-between mb-2">
             <p className="text-xs text-mute font-semibold">Annual Amount</p>
             <IconTile icon={TrendingDown} tone="red" size={16} />
           </div>
           <p className="text-xl font-black tracking-tight text-ink mb-1">{formatCurrency(annualAmount)}</p>
-          <Badge tone="red">-6.8% vs last year</Badge>
+          <Badge tone={annualChange >= 0 ? 'green' : 'red'}>
+            {annualChange >= 0 ? '+' : ''}{annualChange.toFixed(1)}% vs last year
+          </Badge>
         </Card>
       </div>
 
@@ -589,7 +658,12 @@ export default function RecurringPage() {
                 </tr>
               ))}
               {filteredItems.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-16 text-mute"><AlertCircle size={32} className="mx-auto mb-2 text-mute/50" />No recurring payments found</td></tr>
+                <tr>
+                  <td colSpan={7} className="text-center py-16 text-mute">
+                    <AlertCircle size={32} className="mx-auto mb-2 text-mute/50" />
+                    No recurring payments found
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>

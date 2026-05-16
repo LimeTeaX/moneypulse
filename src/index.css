@@ -15,20 +15,6 @@
   --color-border: rgba(14, 15, 12, 0.08);
 }
 
-.dark {
-  --color-primary: #9fe870;
-  --color-primary-hover: #cdffad;
-  --color-primary-pale: rgba(159, 232, 112, 0.15);
-  --color-surface: #1a1f1e;
-  --color-surface-soft: #0f1412;
-  --color-ink: #edf2f0;
-  --color-body: #a8b3b0;
-  --color-mute: #6b7a76;
-  --color-border: rgba(237, 242, 240, 0.08);
-  --color-positive: #4ade80;
-  --color-danger: #f87171;
-}
-
 * { box-sizing: border-box; }
 html { font-size: 16px; }
 body {
@@ -125,4 +111,16 @@ button, a, [role="button"], .clickable {
   background-color: var(--color-surface);
   border-color: var(--color-primary);
   color: var(--color-ink);
+}
+
+.toast-container {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+.toast-container > div {
+  pointer-events: auto;
 }
